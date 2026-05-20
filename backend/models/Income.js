@@ -1,0 +1,35 @@
+const mongoose = require('mongoose');
+
+const IncomeSchema = mongoose.Schema({
+    userId:{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+    },
+    icon:{
+        type: String
+    },
+    source:{
+        type: String,
+        required: true,
+    },//example salary, freelance, etc
+    amount:{
+        type: Number,
+        required: true,
+    },
+    date:{
+        type: Date,
+        default: Date.now,
+    },
+    isDeleted:{
+        type: Boolean,
+        default: false,
+    },
+    deletedAt:{
+        type: Date,
+        default: null,
+    },
+},{timestamps: true}
+);
+
+module.exports = mongoose.model('Income', IncomeSchema);

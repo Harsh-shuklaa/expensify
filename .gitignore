@@ -1,0 +1,77 @@
+
+# ========================
+# ENV FILES (IMPORTANT)
+# ========================
+**/.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# ========================
+# NODE MODULES
+# ========================
+node_modules/
+**/node_modules/ 
+
+# ========================
+# LOG FILES
+# ========================
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ========================
+# OS FILES
+# ========================
+.DS_Store
+Thumbs.db
+
+# ========================
+# BUILD FILES (FRONTEND)
+# ========================
+dist/
+build/
+.vite/
+
+# ========================
+# CACHE FILES
+# ========================
+.cache/
+.parcel-cache/
+.next/
+out/
+
+# ========================
+# UPLOADS (OPTIONAL - if not needed in repo)
+# ========================
+backend/uploads/
+uploads/
+
+# ========================
+# IDE / EDITOR FILES
+# ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ========================
+# TEMP FILES
+# ========================
+tmp/
+temp/
+
+# ========================
+# TEST COVERAGE
+# ========================
+coverage/
+
+# ========================
+# MISC
+# ========================
+*.pid
+*.seed
+*.lock

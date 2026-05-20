@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: 'Inter', sans-serif;
+  --breakpoint-3xl: 1920px;
+  --color-primary: #875cf5;
+  --color-primary-dark: #7c4dff;
+}
+
+@layer base {
+  html {
+    font-family: var(--font-display);
+  }
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ─── Light & Dark body ─── */
+body {
+  background-color: #f8f9fc;
+  overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+.dark body,
+:is(.dark) body {
+  background-color: #0f172a;
+  color: #e2e8f0;
+}
+
+/* ─── Input Box ─── */
+.input-box {
+  @apply w-full flex justify-between gap-3 text-sm text-black bg-slate-100 rounded-lg px-4 py-3 mb-4 mt-3 border border-slate-200 outline-none transition-all duration-200;
+}
+
+.dark .input-box {
+  @apply text-gray-100 bg-slate-800 border-slate-700;
+}
+
+/* ─── Primary Button ─── */
+.btn-primary {
+  @apply w-full text-sm font-medium text-white bg-violet-500 shadow-lg shadow-purple-600/5 p-[10px] rounded-md my-1 hover:bg-purple-600 transition-all duration-200 cursor-pointer;
+}
+
+.dark .btn-primary {
+  @apply bg-violet-600 hover:bg-violet-500 shadow-purple-900/20;
+}
+
+/* ─── Card ─── */
+.card {
+  @apply bg-white p-6 rounded-2xl shadow-md shadow-gray-100 border border-gray-200/50 transition-all duration-200;
+}
+
+.dark .card {
+  @apply bg-slate-800 shadow-slate-900/30 border-slate-700;
+}
+
+/* ─── Card Button ─── */
+.card-btn {
+  @apply flex items-center gap-3 text-[12px] font-medium text-gray-700 hover:text-purple-500 bg-gray-50 hover:bg-purple-50 px-4 py-1.5 rounded-lg border border-gray-200/50 cursor-pointer transition-all duration-200;
+}
+
+.dark .card-btn {
+  @apply text-gray-300 hover:text-purple-400 bg-slate-700 hover:bg-slate-600 border-slate-600;
+}
+
+/* ─── Add Button ─── */
+.add-btn {
+  @apply flex items-center gap-0.5 justify-between text-xs md:text-sm font-medium text-purple-600 whitespace-nowrap bg-purple-50 border border-purple-100 rounded-lg px-4 py-2 cursor-pointer transition-all duration-200;
+}
+
+.dark .add-btn {
+  @apply text-white bg-purple-900/30 border-purple-800;
+}
+
+.add-btn-fill {
+  @apply text-white bg-primary hover:bg-purple-600 hover:shadow-md hover:scale-[1.02] transition-all duration-200;
+}
+
+.dark .add-btn-fill {
+  @apply bg-violet-600 hover:bg-violet-500;
+}
+
+/* ─── Emoji picker overrides ─── */
+.epr-category-nav {
+  display: none !important;
+}
+
+.epr-body {
+  margin-top: 0 !important;
+}
+
+.epr-emoji-category-label {
+  font-size: 12px !important;
+  font-family: 'Inter', sans-serif !important;
+  font-weight: 500 !important;
+  padding: 4px 8px !important;
+  color: #555 !important;
+}
+
+.epr-header>div {
+  padding-bottom: 2px !important;
+}
+
+/* ─── Global Smooth Transitions ─── */
+* {
+  transition-property: background-color, border-color, color, fill, stroke, opacity, box-shadow, transform;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  transition-duration: 150ms;
+}
