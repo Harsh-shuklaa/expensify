@@ -2,36 +2,85 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
+const mongoose = require('mongoose');
+
 const connectDB = require('./config/db');
+const logger = require('./utils/logger');
+
+// Import Custom Middlewares
+const cookieParser = require('./middleware/cookieParser');
+const { sanitizeInput } = require('./middleware/sanitizeMiddleware');
+
+// Import Routes
 const authRoutes = require('./routes/authRoutes');
 const incomeRoutes = require('./routes/incomeRoutes');
 const expenseRoutes = require('./routes/expenseRoutes');
 const dashboardRoutes = require('./routes/dashboardRoutes');
+const feedbackRoutes = require('./routes/feedbackRoutes');
 
 const app = express();
 
-// Middleware to handle CORS
-// app.use(
-//   cors({
-//     origin: process.env.CLIENT_URL || '*',
-//     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-//     allowedHeaders: ['Content-Type', 'Authorization'],
-//   })
-// );
+// Ensure uploads and downloads directories exist
+const uploadsDir = path.join(__dirname, 'uploads');
+const downloadsDir = path.join(__dirname, 'downloads');
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
+if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Enable CORS securely
+const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+app.use(
+    cors({
+        origin: clientUrl,
+        credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+        allowedHeaders: ['Content-Type', 'Authorization'],
+    })
+);
 
-const PORT = process.env.PORT || 5000;
+// Body Parsers & Cookie Parser
+app.use(express.json({ limit: '10kb' })); // Rate limiting request body sizes
+app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+app.use(cookieParser);
 
-connectDB();
+// Prevent NoSQL Injection & XSS attacks
+app.use(sanitizeInput);
 
+// Static uploads folder
+app.use('/uploads', express.static(uploadsDir));
+
+// Route handlers
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/income', incomeRoutes);
 app.use('/api/v1/expense', expenseRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/api/v1/feedback', feedbackRoutes);
+
+// Health Check Endpoint
+app.get('/api/v1/health', async (req, res) => {
+    const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+    res.status(200).json({
+        success: true,
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+        database: dbStatus,
+    });
+});
+
+// Centralized Error Handling Middleware
+app.use((err, req, res, next) => {
+    logger.error(`Unhandled Error: ${err.message}`, err);
+    res.status(err.status || 500).json({
+        success: false,
+        message: err.message || 'Internal Server Error',
+    });
+});
+
+const PORT = process.env.PORT || 8000;
+
+connectDB();
 
 app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+    logger.info(`Server is running in production readiness mode on port ${PORT}`);
 });

@@ -31,4 +31,8 @@ const ExpenseSchema = mongoose.Schema({
     },
 }, { timestamps: true });
 
+// Compound index for query performance on user transactions sorted by date
+ExpenseSchema.index({ userId: 1, date: -1 });
+ExpenseSchema.index({ userId: 1, isDeleted: 1 });
+
 module.exports = mongoose.model('Expense', ExpenseSchema);

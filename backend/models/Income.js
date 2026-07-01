@@ -32,4 +32,8 @@ const IncomeSchema = mongoose.Schema({
 },{timestamps: true}
 );
 
+// Compound index for query performance on user transactions sorted by date
+IncomeSchema.index({ userId: 1, date: -1 });
+IncomeSchema.index({ userId: 1, isDeleted: 1 });
+
 module.exports = mongoose.model('Income', IncomeSchema);
