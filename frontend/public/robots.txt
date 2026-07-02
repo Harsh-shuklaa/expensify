@@ -13,4 +13,4 @@ Disallow: /income
 Disallow: /expense
 Disallow: /recycle-bin
 
-Sitemap: https://expensifyapp-h3qt.onrender.com/sitemap.xml
+Sitemap: /sitemap.xml

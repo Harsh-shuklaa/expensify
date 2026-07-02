@@ -32,8 +32,7 @@ if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true }
 
 // Enable CORS securely for multiple origins
 const allowedOrigins = [
-    'http://localhost:5173',
-    'https://expensifyapp-h3qt.onrender.com'
+    'http://localhost:5173'
 ];
 if (process.env.CLIENT_URL) {
     allowedOrigins.push(process.env.CLIENT_URL.replace(/\/$/, ''));

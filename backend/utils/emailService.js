@@ -86,6 +86,11 @@ const sendViaResend = async ({ to, subject, html, text }) => {
  * Send real email via SMTP if configured, or fall back to local log simulation
  */
 const sendEmail = async ({ to, subject, html, text }) => {
+  // Log email preview in development mode for easy testing/OTP retrieval
+  if (process.env.NODE_ENV !== 'production') {
+    logger.info(`[Dev Mode Email Preview] To: ${to} | Subject: ${subject} | Content: ${text || 'N/A'}`);
+  }
+
   // 1. Try Resend HTTP API if configured (highly recommended for Render Free Tier)
   if (process.env.RESEND_API_KEY) {
     try {
