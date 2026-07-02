@@ -1,6 +1,13 @@
 const Feedback = require('../models/Feedback');
 const logger = require('../utils/logger');
-const { sendEmail } = require('../utils/emailService');
+const {
+    sendEmail,
+    sendBugReportConfirmationEmail,
+    sendFeedbackConfirmationEmail,
+    sendFeatureRequestConfirmationEmail,
+    sendSupportConfirmationEmail,
+    sendAccountIssueConfirmationEmail
+} = require('../utils/emailService');
 
 exports.createFeedback = async (req, res) => {
     try {
@@ -14,7 +21,7 @@ exports.createFeedback = async (req, res) => {
         }
 
         // Validate type
-        const allowedTypes = ['contact', 'bug', 'feedback', 'feature'];
+        const allowedTypes = ['contact', 'bug', 'feedback', 'feature', 'account'];
         if (!allowedTypes.includes(type)) {
             return res.status(400).json({
                 success: false,
@@ -57,6 +64,31 @@ exports.createFeedback = async (req, res) => {
                    <p><strong>Message:</strong></p>
                    <p>${message}</p>`
         });
+
+        // Send contextual SaaS confirmation email to user
+        const emailParams = {
+            to: email,
+            userName: fullname,
+            ticketId: `EXP-${feedback._id.toString().substring(18).toUpperCase()}`,
+            submittedAt: new Date(feedback.createdAt).toLocaleString(),
+            message: message
+        };
+
+        try {
+            if (type === 'bug') {
+                await sendBugReportConfirmationEmail(emailParams);
+            } else if (type === 'feedback') {
+                await sendFeedbackConfirmationEmail(emailParams);
+            } else if (type === 'feature') {
+                await sendFeatureRequestConfirmationEmail(emailParams);
+            } else if (type === 'account') {
+                await sendAccountIssueConfirmationEmail(emailParams);
+            } else {
+                await sendSupportConfirmationEmail(emailParams);
+            }
+        } catch (mailError) {
+            logger.error('Error sending support auto-response email:', mailError);
+        }
 
         res.status(201).json({
             success: true,
