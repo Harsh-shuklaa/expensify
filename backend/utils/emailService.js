@@ -29,10 +29,77 @@ try {
 }
 
 /**
+ * Send email via Resend API (HTTP POST) to bypass Render SMTP port blocking
+ */
+const sendViaResend = async ({ to, subject, html, text }) => {
+    const https = require('https');
+    const apiKey = process.env.RESEND_API_KEY;
+    const from = process.env.SMTP_FROM || 'Expensify <onboarding@resend.dev>';
+
+    const postData = JSON.stringify({
+        from: from.includes('onboarding@resend.dev') ? 'onboarding@resend.dev' : from,
+        to: [to],
+        subject,
+        html,
+        text
+    });
+
+    return new Promise((resolve, reject) => {
+        const req = https.request({
+            hostname: 'api.resend.com',
+            port: 443,
+            path: '/emails',
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${apiKey}`,
+                'Content-Type': 'application/json',
+                'Content-Length': Buffer.byteLength(postData)
+            }
+        }, (res) => {
+            let body = '';
+            res.on('data', (chunk) => body += chunk);
+            res.on('end', () => {
+                if (res.statusCode >= 200 && res.statusCode < 300) {
+                    try {
+                        const parsed = JSON.parse(body);
+                        resolve({ success: true, messageId: parsed.id, mode: 'resend' });
+                    } catch (e) {
+                        resolve({ success: true, messageId: `resend-id-${Date.now()}`, mode: 'resend' });
+                    }
+                } else {
+                    reject(new Error(`Resend API returned status ${res.statusCode}: ${body}`));
+                }
+            });
+        });
+
+        req.on('error', (e) => {
+            reject(e);
+        });
+
+        req.write(postData);
+        req.end();
+    });
+};
+
+/**
  * Send real email via SMTP if configured, or fall back to local log simulation
  */
 const sendEmail = async ({ to, subject, html, text }) => {
-  if (nodemailer && isSmtpConfigured()) {
+    // 1. Try Resend HTTP API if configured (highly recommended for Render Free Tier)
+    if (process.env.RESEND_API_KEY) {
+        try {
+            logger.info(`Attempting to send email via Resend HTTP API to ${to}...`);
+            const result = await sendViaResend({ to, subject, html, text });
+            logger.info(`Email sent successfully via Resend API to ${to}`, { messageId: result.messageId });
+            return result;
+        } catch (error) {
+            logger.error(`Resend API sending failed to ${to}. Attempting SMTP/Simulation fallback...`, error);
+            global.lastSmtpError = `Resend failed: ${error.message}`;
+        }
+    }
+
+    // 2. Try Standard SMTP if configured
+    if (nodemailer && isSmtpConfigured()) {
     try {
       const transporter = nodemailer.createTransport({
         host: process.env.SMTP_HOST,
