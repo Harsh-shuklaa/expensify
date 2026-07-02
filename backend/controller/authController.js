@@ -84,40 +84,49 @@ exports.registerUser = async (req, res) => {
         const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
         const verificationCodeExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
-        // Create User (Unverified initially)
-        const user = await User.create({
-            fullname,
-            email: email.toLowerCase(),
-            password,
-            profileImageUrl,
-            isVerified: false,
-            verificationCode,
-            verificationCodeExpires,
-        });
+        let user;
+        try {
+            // Create User (Unverified initially)
+            user = await User.create({
+                fullname,
+                email: email.toLowerCase(),
+                password,
+                profileImageUrl,
+                isVerified: false,
+                verificationCode,
+                verificationCodeExpires,
+            });
 
-        // Send Email (Logged to sent_emails.log in dev)
-        await sendEmail({
-            to: user.email,
-            subject: 'Verify Your Expensify Account',
-            text: `Welcome to Expensify! Your email verification code is: ${verificationCode}. It is valid for 24 hours.`,
-            html: `<h3>Welcome to Expensify!</h3>
-                   <p>Your verification code is: <strong>${verificationCode}</strong></p>
-                   <p>This code will expire in 24 hours.</p>`,
-        });
+            // Send Email (Logged to sent_emails.log in dev)
+            await sendEmail({
+                to: user.email,
+                subject: 'Verify Your Expensify Account',
+                text: `Welcome to Expensify! Your email verification code is: ${verificationCode}. It is valid for 24 hours.`,
+                html: `<h3>Welcome to Expensify!</h3>
+                       <p>Your verification code is: <strong>${verificationCode}</strong></p>
+                       <p>This code will expire in 24 hours.</p>`,
+            });
 
-        logger.info(`User registered successfully: ${user.email}`);
+            logger.info(`User registered successfully: ${user.email}`);
 
-        res.status(201).json({
-            success: true,
-            message: 'Registration successful! Please verify your email.',
-            email: user.email,
-            isVerified: false,
-        });
+            res.status(201).json({
+                success: true,
+                message: 'Registration successful! Please verify your email.',
+                email: user.email,
+                isVerified: false,
+            });
+        } catch (innerError) {
+            if (user && user._id) {
+                await User.findByIdAndDelete(user._id);
+                logger.warn(`Registration rolled back: deleted user ${user.email} due to error: ${innerError.message}`);
+            }
+            throw innerError;
+        }
     } catch (error) {
         logger.error('Error registering user:', error);
         res.status(500).json({
             success: false,
-            message: 'Error registering user',
+            message: error.message || 'Error registering user',
             error: error.message,
         });
     }
