@@ -7,63 +7,64 @@ const emailLogPath = path.join(logsDir, 'sent_emails.log');
 
 // Ensure log directory exists
 if (!fs.existsSync(logsDir)) {
-    fs.mkdirSync(logsDir, { recursive: true });
+  fs.mkdirSync(logsDir, { recursive: true });
 }
 
 // SMTP credentials check
 const isSmtpConfigured = () => {
-    return !!(
-        process.env.SMTP_HOST &&
-        process.env.SMTP_PORT &&
-        process.env.SMTP_USER &&
-        process.env.SMTP_PASS
-    );
+  return !!(
+    process.env.SMTP_HOST &&
+    process.env.SMTP_PORT &&
+    process.env.SMTP_USER &&
+    process.env.SMTP_PASS
+  );
 };
 
 // Try loading nodemailer dynamically
 let nodemailer = null;
 try {
-    nodemailer = require('nodemailer');
+  nodemailer = require('nodemailer');
 } catch (e) {
-    logger.info('Nodemailer is not installed locally. Email service will run in simulated mode.');
+  logger.info('Nodemailer is not installed locally. Email service will run in simulated mode.');
 }
 
 /**
  * Send real email via SMTP if configured, or fall back to local log simulation
  */
 const sendEmail = async ({ to, subject, html, text }) => {
-    if (nodemailer && isSmtpConfigured()) {
-        try {
-            const transporter = nodemailer.createTransport({
-                host: process.env.SMTP_HOST,
-                port: parseInt(process.env.SMTP_PORT),
-                secure: process.env.SMTP_SECURE === 'true',
-                auth: {
-                    user: process.env.SMTP_USER,
-                    pass: process.env.SMTP_PASS,
-                },
-            });
-
-            const mailOptions = {
-                from: process.env.SMTP_FROM || '"Expensify Support" <expensifya@gmail.com>',
-                to,
-                subject,
-                text,
-                html,
-            };
-
-            const info = await transporter.sendMail(mailOptions);
-            logger.info(`Email sent successfully via SMTP to ${to}`, { messageId: info.messageId });
-            return { success: true, messageId: info.messageId };
-        } catch (error) {
-            logger.error(`Failed to send email via SMTP to ${to}. Attempting fallback simulation...`, error);
-        }
-    }
-
+  if (nodemailer && isSmtpConfigured()) {
     try {
-        const timestamp = new Date().toISOString();
-        const border = '='.repeat(80);
-        const emailRecord = `
+      const transporter = nodemailer.createTransport({
+        host: process.env.SMTP_HOST,
+        port: parseInt(process.env.SMTP_PORT),
+        secure: process.env.SMTP_SECURE === 'true',
+        auth: {
+          user: process.env.SMTP_USER,
+          pass: process.env.SMTP_PASS,
+        },
+      });
+
+      const mailOptions = {
+        from: process.env.SMTP_FROM || '"Expensify Support" <expensifya@gmail.com>',
+        to,
+        subject,
+        text,
+        html,
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      logger.info(`Email sent successfully via SMTP to ${to}`, { messageId: info.messageId });
+      return { success: true, messageId: info.messageId, mode: 'smtp' };
+    } catch (error) {
+      logger.error(`Failed to send email via SMTP to ${to}. Attempting fallback simulation...`, error);
+      global.lastSmtpError = error.message || error;
+    }
+  }
+
+  try {
+    const timestamp = new Date().toISOString();
+    const border = '='.repeat(80);
+    const emailRecord = `
 ${border}
 Date: ${timestamp}
 To: ${to}
@@ -77,17 +78,17 @@ ${html}
 ${border}
 \n`;
 
-        try {
-            fs.appendFileSync(emailLogPath, emailRecord, 'utf8');
-        } catch (fileError) {
-            logger.error('Failed to log simulated email to file, falling back to console:', fileError.message);
-        }
-        logger.info(`[Simulation Mode] Email for ${to} | OTP/Content: ${text || 'N/A'}`);
-        return { success: true, messageId: `simulated-id-${Date.now()}` };
-    } catch (error) {
-        logger.error('Failed to process simulated email:', error);
-        return { success: true, messageId: `simulated-id-fallback-${Date.now()}` };
+    try {
+      fs.appendFileSync(emailLogPath, emailRecord, 'utf8');
+    } catch (fileError) {
+      logger.error('Failed to log simulated email to file, falling back to console:', fileError.message);
     }
+    logger.info(`[Simulation Mode] Email for ${to} | OTP/Content: ${text || 'N/A'}`);
+    return { success: true, messageId: `simulated-id-${Date.now()}`, mode: 'simulation', smtpError: global.lastSmtpError };
+  } catch (error) {
+    logger.error('Failed to process simulated email:', error);
+    return { success: true, messageId: `simulated-id-fallback-${Date.now()}`, mode: 'simulation_fallback', error: error.message };
+  }
 };
 
 /**
@@ -318,147 +319,147 @@ const getEmailWrapperHTML = ({ title, bodyHtml, userName, ticketId, requestType,
  * 1. Bug Report Confirmation Email
  */
 const sendBugReportConfirmationEmail = async ({ to, userName, ticketId, submittedAt, message }) => {
-    const ticket = ticketId || `EXP-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-    const time = submittedAt || new Date().toLocaleString();
-    const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard`;
+  const ticket = ticketId || `EXP-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+  const time = submittedAt || new Date().toLocaleString();
+  const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard`;
 
-    const html = getEmailWrapperHTML({
-        title: "Bug Report Received",
-        bodyHtml: "We have received your bug report. Our technical team is investigating the issue to understand what went wrong. We appreciate your patience as we diagnose this. If additional context is needed, one of our representatives will contact you directly on this ticket.",
-        userName,
-        ticketId: ticket,
-        requestType: "Bug Report",
-        submittedAt: time,
-        status: "Received",
-        dashboardUrl,
-        originalMessage: message
-    });
+  const html = getEmailWrapperHTML({
+    title: "Bug Report Received",
+    bodyHtml: "We have received your bug report. Our technical team is investigating the issue to understand what went wrong. We appreciate your patience as we diagnose this. If additional context is needed, one of our representatives will contact you directly on this ticket.",
+    userName,
+    ticketId: ticket,
+    requestType: "Bug Report",
+    submittedAt: time,
+    status: "Received",
+    dashboardUrl,
+    originalMessage: message
+  });
 
-    return await sendEmail({
-        to,
-        subject: `Bug Report Logged: [${ticket}]`,
-        text: `Hi ${userName},\n\nWe have received your bug report. Our engineering team is currently investigating. Ticket ID: ${ticket}.\n\nMessage:\n"${message}"`,
-        html
-    });
+  return await sendEmail({
+    to,
+    subject: `Bug Report Logged: [${ticket}]`,
+    text: `Hi ${userName},\n\nWe have received your bug report. Our engineering team is currently investigating. Ticket ID: ${ticket}.\n\nMessage:\n"${message}"`,
+    html
+  });
 };
 
 /**
  * 2. Feedback Confirmation Email
  */
 const sendFeedbackConfirmationEmail = async ({ to, userName, ticketId, submittedAt, message }) => {
-    const ticket = ticketId || `EXP-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-    const time = submittedAt || new Date().toLocaleString();
-    const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard`;
+  const ticket = ticketId || `EXP-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+  const time = submittedAt || new Date().toLocaleString();
+  const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard`;
 
-    const html = getEmailWrapperHTML({
-        title: "Feedback Logged",
-        bodyHtml: "Thank you for helping us improve Expensify! We have logged your feedback. Suggestions and notes from our community are reviewed directly by the product team to assist in shaping upcoming release versions.",
-        userName,
-        ticketId: ticket,
-        requestType: "Feedback",
-        submittedAt: time,
-        status: "Received",
-        dashboardUrl,
-        originalMessage: message
-    });
+  const html = getEmailWrapperHTML({
+    title: "Feedback Logged",
+    bodyHtml: "Thank you for helping us improve Expensify! We have logged your feedback. Suggestions and notes from our community are reviewed directly by the product team to assist in shaping upcoming release versions.",
+    userName,
+    ticketId: ticket,
+    requestType: "Feedback",
+    submittedAt: time,
+    status: "Received",
+    dashboardUrl,
+    originalMessage: message
+  });
 
-    return await sendEmail({
-        to,
-        subject: `Feedback Logged: [${ticket}]`,
-        text: `Hi ${userName},\n\nThank you for your feedback! It has been successfully recorded. Ticket ID: ${ticket}.\n\nMessage:\n"${message}"`,
-        html
-    });
+  return await sendEmail({
+    to,
+    subject: `Feedback Logged: [${ticket}]`,
+    text: `Hi ${userName},\n\nThank you for your feedback! It has been successfully recorded. Ticket ID: ${ticket}.\n\nMessage:\n"${message}"`,
+    html
+  });
 };
 
 /**
  * 3. Feature Request Confirmation Email
  */
 const sendFeatureRequestConfirmationEmail = async ({ to, userName, ticketId, submittedAt, message }) => {
-    const ticket = ticketId || `EXP-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-    const time = submittedAt || new Date().toLocaleString();
-    const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard`;
+  const ticket = ticketId || `EXP-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+  const time = submittedAt || new Date().toLocaleString();
+  const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard`;
 
-    const html = getEmailWrapperHTML({
-        title: "Feature Request Recorded",
-        bodyHtml: "Your feature suggestion has been successfully logged! We constantly evaluate feature ideas to enhance our expense tracker. We have added this request to our backlog for consideration in future platform updates.",
-        userName,
-        ticketId: ticket,
-        requestType: "Feature Request",
-        submittedAt: time,
-        status: "Received",
-        dashboardUrl,
-        originalMessage: message
-    });
+  const html = getEmailWrapperHTML({
+    title: "Feature Request Recorded",
+    bodyHtml: "Your feature suggestion has been successfully logged! We constantly evaluate feature ideas to enhance our expense tracker. We have added this request to our backlog for consideration in future platform updates.",
+    userName,
+    ticketId: ticket,
+    requestType: "Feature Request",
+    submittedAt: time,
+    status: "Received",
+    dashboardUrl,
+    originalMessage: message
+  });
 
-    return await sendEmail({
-        to,
-        subject: `Feature Request Logged: [${ticket}]`,
-        text: `Hi ${userName},\n\nYour feature suggestion has been logged! Ticket ID: ${ticket}.\n\nMessage:\n"${message}"`,
-        html
-    });
+  return await sendEmail({
+    to,
+    subject: `Feature Request Logged: [${ticket}]`,
+    text: `Hi ${userName},\n\nYour feature suggestion has been logged! Ticket ID: ${ticket}.\n\nMessage:\n"${message}"`,
+    html
+  });
 };
 
 /**
  * 4. Contact Support Confirmation Email
  */
 const sendSupportConfirmationEmail = async ({ to, userName, ticketId, submittedAt, message }) => {
-    const ticket = ticketId || `EXP-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-    const time = submittedAt || new Date().toLocaleString();
-    const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard`;
+  const ticket = ticketId || `EXP-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+  const time = submittedAt || new Date().toLocaleString();
+  const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard`;
 
-    const html = getEmailWrapperHTML({
-        title: "Support Request Received",
-        bodyHtml: "We have received your support request. Our customer support desk will review the details and get back to you shortly. Our typical response window is under 24 hours.",
-        userName,
-        ticketId: ticket,
-        requestType: "Contact Support",
-        submittedAt: time,
-        status: "Received",
-        dashboardUrl,
-        originalMessage: message
-    });
+  const html = getEmailWrapperHTML({
+    title: "Support Request Received",
+    bodyHtml: "We have received your support request. Our customer support desk will review the details and get back to you shortly. Our typical response window is under 24 hours.",
+    userName,
+    ticketId: ticket,
+    requestType: "Contact Support",
+    submittedAt: time,
+    status: "Received",
+    dashboardUrl,
+    originalMessage: message
+  });
 
-    return await sendEmail({
-        to,
-        subject: `Support Ticket Created: [${ticket}]`,
-        text: `Hi ${userName},\n\nWe have received your support request. A support representative will respond shortly. Ticket ID: ${ticket}.\n\nMessage:\n"${message}"`,
-        html
-    });
+  return await sendEmail({
+    to,
+    subject: `Support Ticket Created: [${ticket}]`,
+    text: `Hi ${userName},\n\nWe have received your support request. A support representative will respond shortly. Ticket ID: ${ticket}.\n\nMessage:\n"${message}"`,
+    html
+  });
 };
 
 /**
  * 5. Account Issue Confirmation Email
  */
 const sendAccountIssueConfirmationEmail = async ({ to, userName, ticketId, submittedAt, message }) => {
-    const ticket = ticketId || `EXP-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
-    const time = submittedAt || new Date().toLocaleString();
-    const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard`;
+  const ticket = ticketId || `EXP-${Math.random().toString(36).substr(2, 9).toUpperCase()}`;
+  const time = submittedAt || new Date().toLocaleString();
+  const dashboardUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/dashboard`;
 
-    const html = getEmailWrapperHTML({
-        title: "Account Request Logged",
-        bodyHtml: "We have received your account security/profile ticket. To protect your data, please be aware that our support team might request identity verification details before modifying configuration metrics or account details.",
-        userName,
-        ticketId: ticket,
-        requestType: "Account Issue",
-        submittedAt: time,
-        status: "Received",
-        dashboardUrl,
-        originalMessage: message
-    });
+  const html = getEmailWrapperHTML({
+    title: "Account Request Logged",
+    bodyHtml: "We have received your account security/profile ticket. To protect your data, please be aware that our support team might request identity verification details before modifying configuration metrics or account details.",
+    userName,
+    ticketId: ticket,
+    requestType: "Account Issue",
+    submittedAt: time,
+    status: "Received",
+    dashboardUrl,
+    originalMessage: message
+  });
 
-    return await sendEmail({
-        to,
-        subject: `Account Request Logged: [${ticket}]`,
-        text: `Hi ${userName},\n\nWe have received your account request. Ticket ID: ${ticket}.\n\nMessage:\n"${message}"`,
-        html
-    });
+  return await sendEmail({
+    to,
+    subject: `Account Request Logged: [${ticket}]`,
+    text: `Hi ${userName},\n\nWe have received your account request. Ticket ID: ${ticket}.\n\nMessage:\n"${message}"`,
+    html
+  });
 };
 
 module.exports = {
-    sendEmail,
-    sendBugReportConfirmationEmail,
-    sendFeedbackConfirmationEmail,
-    sendFeatureRequestConfirmationEmail,
-    sendSupportConfirmationEmail,
-    sendAccountIssueConfirmationEmail
+  sendEmail,
+  sendBugReportConfirmationEmail,
+  sendFeedbackConfirmationEmail,
+  sendFeatureRequestConfirmationEmail,
+  sendSupportConfirmationEmail,
+  sendAccountIssueConfirmationEmail
 };

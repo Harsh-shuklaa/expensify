@@ -87,6 +87,31 @@ app.get('/api/v1/health', async (req, res) => {
     });
 });
 
+// Diagnostic SMTP Email Test Endpoint
+app.get('/api/v1/health/test-email', async (req, res) => {
+    const { sendEmail } = require('./utils/emailService');
+    try {
+        const result = await sendEmail({
+            to: process.env.SMTP_USER || 'expensifya@gmail.com',
+            subject: 'Expensify - SMTP Test Email',
+            text: 'This is a test email to verify that SMTP is configured correctly on Render.',
+            html: '<p>This is a test email to verify that SMTP is configured correctly on Render.</p>',
+        });
+        res.status(200).json({
+            success: true,
+            message: 'Test email request processed.',
+            result
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Failed to execute test email call',
+            error: error.message,
+            stack: error.stack
+        });
+    }
+});
+
 // Centralized Error Handling Middleware
 app.use((err, req, res, next) => {
     logger.error(`Unhandled Error: ${err.message}`, err);

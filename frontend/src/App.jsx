@@ -64,7 +64,7 @@ const App = () => {
             <Route path='/recycle-bin' element={<RecycleBin />} />
             <Route path='/support' element={<Support />} />
             <Route path='/settings' element={<Settings />} />
-            
+
             {/* Compliance routes */}
             <Route path='/privacy-policy' element={<PrivacyPolicy />} />
             <Route path='/terms-of-service' element={<TermsOfService />} />
