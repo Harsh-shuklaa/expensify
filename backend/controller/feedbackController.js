@@ -47,7 +47,7 @@ exports.createFeedback = async (req, res) => {
 
         // Notify support/admin (simulated email)
         await sendEmail({
-            to: 'support@expensify.com',
+            to: 'expensifya@gmail.com',
             subject: `[New ${type.toUpperCase()}] ${subject}`,
             text: `Feedback ID: ${feedback._id}\nFrom: ${fullname} (${email})\nMessage:\n${message}`,
             html: `<h3>New Support Submission</h3>

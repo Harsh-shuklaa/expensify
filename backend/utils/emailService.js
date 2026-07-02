@@ -46,7 +46,7 @@ const sendEmail = async ({ to, subject, html, text }) => {
             });
 
             const mailOptions = {
-                from: process.env.SMTP_FROM || '"Expensify Support" <noreply@expensify.com>',
+                from: process.env.SMTP_FROM || '"Expensify Support" <expensifya@gmail.com>',
                 to,
                 subject,
                 text,

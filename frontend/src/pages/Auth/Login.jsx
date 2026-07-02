@@ -7,6 +7,7 @@ import axiosInstance from '../../utils/axiosInstance.js';
 import { API_PATHS } from '../../utils/apiPaths.js';
 import { useContext } from 'react';
 import { UserContext } from '../../context/UserContext.jsx';
+import { trackEvent } from '../../utils/analytics';
 
 const Login = () => {
   const [email, setEmail] = useState('')
@@ -42,6 +43,7 @@ const Login = () => {
         const userRes = await axiosInstance.get(API_PATHS.AUTH.GET_USER_INFO);
         updateUser(userRes.data.user);
         localStorage.setItem("user", JSON.stringify(userRes.data.user));
+        trackEvent("login", "Authentication", email);
         navigate("/dashboard");
       }
     } catch (error) {
@@ -77,6 +79,12 @@ const Login = () => {
             placeholder="Min 8 characters"
             type="password"
           />
+
+          <div className="flex justify-end mt-1 mb-4">
+            <Link className="text-[12px] font-medium text-primary underline" to="/forgot-password">
+              Forgot Password?
+            </Link>
+          </div>
 
           {error && <p className="text-red-500 text-xs pb-2.5">{error}</p>}
           <button type="submit" className="btn-primary">

@@ -2,6 +2,7 @@ import React from 'react';
 import CARD2 from "../../assets/images/card2.png";
 import LOGO from "../../assets/images/logo.png";
 import { LuTrendingUpDown } from 'react-icons/lu';
+import { Link } from 'react-router-dom';
 
 const StatsInfoCard = ({ icon, label, value, color }) => {
   return (
@@ -11,7 +12,7 @@ const StatsInfoCard = ({ icon, label, value, color }) => {
       </div>
       <div>
         <h6 className='text-xs text-gray-500 dark:text-gray-400 mb-1'>{label}</h6>
-        <span className='text-[20px] dark:text-white'>${value}</span>
+        <span className='text-[20px] dark:text-white'>₹{value}</span>
       </div>
     </div>
   );
@@ -20,12 +21,21 @@ const StatsInfoCard = ({ icon, label, value, color }) => {
 const AuthLayout = ({ children }) => {
   return (
     <div className='flex min-h-screen bg-white dark:bg-slate-900'>
-      <div className='w-screen h-screen md:w-[60vw] px-12 pt-8 pb-12'>
-        <div className="flex items-center gap-2 mb-2">
-          <img src={LOGO} alt="Expensify Logo" className="w-8 h-8 rounded-lg" />
-          <h2 className='text-lg font-semibold text-black dark:text-white'>Expensify</h2>
+      <div className='w-screen h-screen md:w-[60vw] px-12 pt-8 pb-12 flex flex-col justify-between overflow-y-auto'>
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <img src={LOGO} alt="Expensify Logo" className="w-8 h-8 rounded-lg" />
+            <h2 className='text-lg font-semibold text-black dark:text-white'>Expensify</h2>
+          </div>
+          {children}
         </div>
-        {children}
+        <footer className="mt-8 pt-4 border-t border-gray-100 dark:border-slate-800/50 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-400 dark:text-gray-500 justify-center">
+          <Link to="/privacy-policy" className="hover:underline">Privacy Policy</Link>
+          <Link to="/terms-of-service" className="hover:underline">Terms of Service</Link>
+          <Link to="/cookie-policy" className="hover:underline">Cookie Policy</Link>
+          <Link to="/data-disclosure" className="hover:underline">Data Disclosure</Link>
+          <Link to="/account-deletion-policy" className="hover:underline">Account Deletion Policy</Link>
+        </footer>
       </div>
 
       <div className='hidden md:block w-[40vw] h-screen bg-violet-50 dark:bg-slate-800 bg-auth-bd-img bg-cover bg-no-repeat bg-center overflow-hidden p-8 relative'>

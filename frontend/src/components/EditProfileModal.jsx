@@ -7,6 +7,7 @@ import axiosInstance from "../utils/axiosInstance";
 import { API_PATHS } from "../utils/apiPaths";
 import uploadImage from "../utils/uploadImage";
 import toast from "react-hot-toast";
+import { trackEvent } from "../utils/analytics";
 
 const EditProfileModal = ({ isOpen, onClose }) => {
   const { user, updateUser } = useContext(UserContext);
@@ -84,6 +85,45 @@ const EditProfileModal = ({ isOpen, onClose }) => {
     }
   };
 
+  const handleExportData = async () => {
+    try {
+      toast.loading("Exporting data...", { id: "export-toast" });
+      const response = await axiosInstance.get(API_PATHS.AUTH.EXPORT_DATA, {
+        responseType: 'blob'
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'expensify_data_export.json');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success("Data exported successfully!", { id: "export-toast" });
+      trackEvent('export_data', 'GDPR');
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error("Failed to export data", { id: "export-toast" });
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!window.confirm("Are you sure you want to PERMANENTLY delete your account? This action cannot be undone and all your financial data will be permanently wiped out under GDPR compliance.")) {
+      return;
+    }
+
+    try {
+      toast.loading("Deleting account...", { id: "delete-toast" });
+      await axiosInstance.delete(API_PATHS.AUTH.DELETE_ACCOUNT);
+      toast.success("Account permanently deleted", { id: "delete-toast" });
+      localStorage.clear();
+      window.location.href = "/login";
+    } catch (error) {
+      console.error("Deletion error:", error);
+      toast.error("Failed to delete account", { id: "delete-toast" });
+    }
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="Edit Profile">
       <div className="space-y-4">
@@ -130,10 +170,30 @@ const EditProfileModal = ({ isOpen, onClose }) => {
           )}
         </div>
 
+        <div className="border-t border-gray-200 dark:border-slate-700 pt-4 mt-4">
+          <h6 className="text-xs font-bold text-gray-800 dark:text-gray-200 mb-2">GDPR & Compliance Control</h6>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={handleExportData}
+              className="px-3 py-1.5 border border-purple-200 dark:border-purple-900/40 text-purple-600 dark:text-purple-400 text-xs font-semibold rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 cursor-pointer transition-colors"
+            >
+              Export Data (JSON)
+            </button>
+            <button
+              type="button"
+              onClick={handleDeleteAccount}
+              className="px-3 py-1.5 border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 text-xs font-semibold rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer transition-colors"
+            >
+              Delete Account
+            </button>
+          </div>
+        </div>
+
         <div className="flex justify-end mt-6">
           <button
             type="button"
-            className="add-btn add-btn-fill"
+            className="add-btn add-btn-fill animate-hover"
             onClick={handleUpdateProfile}
             disabled={loading}
           >

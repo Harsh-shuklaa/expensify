@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { LuPencil } from 'react-icons/lu';
 import { SIDE_MENU_DATA } from '../../utils/data';
 import { UserContext } from '../../context/UserContext.jsx';
+import { trackEvent } from '../../utils/analytics';
 import CharAvatar from '../../components/Cards/CharAvatar.jsx';
 import EditProfileModal from '../EditProfileModal';
 
@@ -20,6 +21,7 @@ const SideMenu = ({ activeMenu }) => {
   };
 
   const handleLogout = () => {
+    trackEvent("logout", "Authentication");
     localStorage.clear();
     clearUser();
     navigate("/login");

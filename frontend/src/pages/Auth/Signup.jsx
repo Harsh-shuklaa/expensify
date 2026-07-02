@@ -9,6 +9,7 @@ import ProfilePhotoSelector from "../../components/Inputs/ProfilePhotoSelector";
 import { useContext } from 'react';
 import { UserContext } from '../../context/UserContext.jsx';
 import uploadImage from "../../utils/uploadImage";
+import { trackEvent } from '../../utils/analytics';
 
 const SignUp = () => {
   const [profilePic, setProfilePic] = useState(null);
@@ -58,10 +59,9 @@ const SignUp = () => {
       });
       const { token, user } = response.data;
 
-      if (token) {
-        localStorage.setItem("token", token);
-        updateUser(user);
-        navigate("/dashboard");
+      if (response.data && response.data.success) {
+        trackEvent("signup_initiated", "Authentication", email);
+        navigate("/verify-email", { state: { email } });
       }
     } catch (error) {
       if (error.response && error.response.data.message) {

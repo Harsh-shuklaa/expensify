@@ -145,7 +145,7 @@ const RecycleBin = () => {
                           {item.type === "income" ? "Income" : "Expense"}
                         </span>
                         <span className="text-xs text-gray-400 dark:text-gray-500">
-                          ${item.amount} · Deleted {moment(item.deletedAt).fromNow()}
+                          ₹{item.amount} · Deleted {moment(item.deletedAt).fromNow()}
                         </span>
                       </div>
                     </div>

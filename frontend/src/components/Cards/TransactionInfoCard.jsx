@@ -24,7 +24,11 @@ const TransactionInfoCard = ({
     <div className='group flex items-center gap-4 mt-2 p-3 rounded-lg hover:bg-gray-100/60 dark:hover:bg-slate-700/50 transition-all duration-200'>
       <div className='w-12 h-12 flex items-center justify-center text-xl text-gray-800 dark:text-gray-200 bg-gray-100 dark:bg-slate-700 rounded-full'>{
         icon ? (
-          <img src={icon} alt={title} className='w-6 h-6' />
+          icon.startsWith("http") || icon.startsWith("/") ? (
+            <img src={icon} alt={title} className='w-6 h-6' />
+          ) : (
+            <span className="text-xl">{icon}</span>
+          )
         ) : (
           <LuUtensils />
         )}
@@ -58,7 +62,7 @@ const TransactionInfoCard = ({
 
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-md ${getAmountStyles()}`}>
             <h6 className='text-xs font-medium'>
-              {type === "income" ? "+" : "-"}${amount}
+              {type === "income" ? "+" : "-"}₹{amount}
             </h6>
             {type === "income" ? <LuTrendingUp /> : <LuTrendingDown />}
           </div>

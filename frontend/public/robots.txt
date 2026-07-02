@@ -1,0 +1,16 @@
+User-agent: *
+Allow: /
+Allow: /login
+Allow: /signup
+Allow: /privacy-policy
+Allow: /terms-of-service
+Allow: /cookie-policy
+Allow: /data-disclosure
+Allow: /account-deletion-policy
+Disallow: /dashboard
+Disallow: /home
+Disallow: /income
+Disallow: /expense
+Disallow: /recycle-bin
+
+Sitemap: http://localhost:5173/sitemap.xml

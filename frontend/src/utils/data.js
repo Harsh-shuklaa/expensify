@@ -4,6 +4,8 @@ import {
   LuWalletMinimal,
   LuLogOut,
   LuTrash2,
+  LuCircleHelp,
+  LuSettings,
 } from "react-icons/lu";
 
 export const SIDE_MENU_DATA = [
@@ -30,6 +32,18 @@ export const SIDE_MENU_DATA = [
     label: "Archived Transactions",
     icon: LuTrash2,
     path: "/recycle-bin",
+  },
+  {
+    id: "05",
+    label: "Support",
+    icon: LuCircleHelp,
+    path: "/support",
+  },
+  {
+    id: "07",
+    label: "Settings",
+    icon: LuSettings,
+    path: "/settings",
   },
   {
     id: "06",

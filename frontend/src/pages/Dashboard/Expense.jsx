@@ -9,6 +9,7 @@ import ExpenseOverview from '../../components/Expense/ExpenseOverview';
 import AddExpenseForm from '../../components/Expense/AddExpneseForm';
 import ExpenseList from '../../components/Expense/ExpenseList';
 import DeleteAlert from '../../components/DeleteAlert';
+import { trackEvent } from '../../utils/analytics';
 
 const Expense = () => {
   useUserAuth();
@@ -63,9 +64,11 @@ const Expense = () => {
       if (editingExpense) {
         await axiosInstance.put(API_PATHS.EXPENSE.UPDATE_EXPENSE(editingExpense._id), payload);
         toast.success("Expense updated successfully");
+        trackEvent("edit_expense", "Budgeting", category);
       } else {
         await axiosInstance.post(API_PATHS.EXPENSE.ADD_EXPENSE, payload);
         toast.success("Expense added successfully");
+        trackEvent("add_expense", "Budgeting", category);
       }
 
       setOpenAddExpenseModal(false);
@@ -90,6 +93,7 @@ const Expense = () => {
       await axiosInstance.delete(API_PATHS.EXPENSE.DELETE_EXPENSE(id));
       setOpenDeleteAlert({ show: false, data: null });
       toast.success("Expense moved to Archived Transactions");
+      trackEvent("delete_expense", "Budgeting");
       fetchExpenseDetails();
     } catch (error) {
       console.log("Error deleting expense:", error.response?.data?.message || error.message);
