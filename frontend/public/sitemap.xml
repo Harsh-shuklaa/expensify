@@ -1,49 +1,49 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>http://localhost:5173/</loc>
+    <loc>https://expensifyapp-h3qt.onrender.com/</loc>
     <lastmod>2026-07-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>http://localhost:5173/login</loc>
+    <loc>https://expensifyapp-h3qt.onrender.com/login</loc>
     <lastmod>2026-07-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>http://localhost:5173/signup</loc>
+    <loc>https://expensifyapp-h3qt.onrender.com/signup</loc>
     <lastmod>2026-07-02</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
   </url>
   <url>
-    <loc>http://localhost:5173/privacy-policy</loc>
+    <loc>https://expensifyapp-h3qt.onrender.com/privacy-policy</loc>
     <lastmod>2026-07-02</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>http://localhost:5173/terms-of-service</loc>
+    <loc>https://expensifyapp-h3qt.onrender.com/terms-of-service</loc>
     <lastmod>2026-07-02</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>http://localhost:5173/cookie-policy</loc>
+    <loc>https://expensifyapp-h3qt.onrender.com/cookie-policy</loc>
     <lastmod>2026-07-02</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>http://localhost:5173/data-disclosure</loc>
+    <loc>https://expensifyapp-h3qt.onrender.com/data-disclosure</loc>
     <lastmod>2026-07-02</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>
   </url>
   <url>
-    <loc>http://localhost:5173/account-deletion-policy</loc>
+    <loc>https://expensifyapp-h3qt.onrender.com/account-deletion-policy</loc>
     <lastmod>2026-07-02</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>

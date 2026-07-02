@@ -21,19 +21,38 @@ const feedbackRoutes = require('./routes/feedbackRoutes');
 
 const app = express();
 
+// Trust reverse proxy (Render) to correctly identify client IPs and protocols (HTTP vs HTTPS)
+app.set('trust proxy', 1);
+
 // Ensure uploads and downloads directories exist
 const uploadsDir = path.join(__dirname, 'uploads');
 const downloadsDir = path.join(__dirname, 'downloads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });
 
-// Enable CORS securely
-const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+// Enable CORS securely for multiple origins
+const allowedOrigins = [
+    'http://localhost:5173',
+    'https://expensifyapp-h3qt.onrender.com'
+];
+if (process.env.CLIENT_URL) {
+    allowedOrigins.push(process.env.CLIENT_URL.replace(/\/$/, ''));
+}
+const uniqueAllowedOrigins = [...new Set(allowedOrigins)];
+
 app.use(
     cors({
-        origin: clientUrl,
+        origin: function (origin, callback) {
+            // Allow requests with no origin (like mobile apps, postman, curl)
+            if (!origin) return callback(null, true);
+            if (uniqueAllowedOrigins.indexOf(origin) !== -1 || origin.startsWith('http://localhost:')) {
+                return callback(null, true);
+            } else {
+                return callback(new Error('Not allowed by CORS'));
+            }
+        },
         credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+        methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
         allowedHeaders: ['Content-Type', 'Authorization'],
     })
 );

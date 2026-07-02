@@ -27,10 +27,11 @@ const generateRefreshToken = (id) => {
 
 // Helper to set Refresh Token Cookie
 const setRefreshTokenCookie = (res, token) => {
+    const isProd = process.env.NODE_ENV === 'production';
     res.cookie('refreshToken', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        secure: isProd,
+        sameSite: isProd ? 'none' : 'lax',
         maxAge: REFRESH_TOKEN_COOKIE_MAX_AGE,
     });
 };
@@ -412,10 +413,11 @@ exports.resetPassword = async (req, res) => {
 // Logout User
 exports.logoutUser = async (req, res) => {
     try {
+        const isProd = process.env.NODE_ENV === 'production';
         res.clearCookie('refreshToken', {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            secure: isProd,
+            sameSite: isProd ? 'none' : 'lax',
         });
         res.status(200).json({ success: true, message: 'Logged out successfully' });
     } catch (error) {
@@ -600,10 +602,11 @@ exports.deleteAccount = async (req, res) => {
         logger.warn(`GDPR: Account permanently deleted for ${email}`);
 
         // Clear session cookies
+        const isProd = process.env.NODE_ENV === 'production';
         res.clearCookie('refreshToken', {
             httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
+            secure: isProd,
+            sameSite: isProd ? 'none' : 'lax',
         });
 
         res.status(200).json({
