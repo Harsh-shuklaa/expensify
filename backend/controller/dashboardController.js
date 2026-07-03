@@ -1,6 +1,8 @@
 const Income = require('../models/Income');
 const Expense = require('../models/Expense');
 const { isValidObjectId, Types } = require('mongoose');
+const logger = require('../utils/logger');
+
 
 // DashBoard Data
 exports.getDashboardData = async (req, res) => {
@@ -79,7 +81,7 @@ exports.getDashboardData = async (req, res) => {
             recentTransactions: lastTransactions,
         });
     } catch (error) {
-        console.error(error);
+        logger.error('Error fetching dashboard data:', error);
         res.status(500).json({
             success: false,
             message: 'Error fetching dashboard data',

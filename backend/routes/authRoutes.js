@@ -64,11 +64,8 @@ router.post('/logout', logoutUser);
 
 // User Profile routes
 router.get('/getUser', Protect, getUserInfo);
-router.patch('/update-profile', Protect, updateProfile);
-router.put('/profile', Protect, updateProfile);
 router.patch('/profile', Protect, updateProfile);
 router.patch('/change-password', Protect, changePassword);
-router.put('/change-password', Protect, changePassword);
 
 // Image Upload
 router.post('/upload-image', Protect, upload.single('profileImage'), async (req, res) => {

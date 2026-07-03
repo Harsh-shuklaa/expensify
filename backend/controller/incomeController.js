@@ -1,6 +1,7 @@
 const Income = require('../models/Income');
 const xlsx = require('xlsx');
 const path = require('path');
+const logger = require('../utils/logger');
 
 // ADD INCOME SOURCE
 exports.addIncome = async (req, res) => {
@@ -30,7 +31,7 @@ exports.addIncome = async (req, res) => {
             data: newIncome,
         });
     } catch (error) {
-        console.error(error);
+        logger.error(error.message, error);
         res.status(500).json({
             success: false,
             message: 'Error adding income source',
@@ -50,7 +51,7 @@ exports.getAllIncome = async (req, res) => {
             data: income,
         });
     } catch (error) {
-        console.error(error);
+        logger.error(error.message, error);
         res.status(500).json({
             success: false,
             message: 'Error fetching income sources',
@@ -90,7 +91,7 @@ exports.updateIncome = async (req, res) => {
             data: updatedIncome,
         });
     } catch (error) {
-        console.error(error);
+        logger.error(error.message, error);
         res.status(500).json({
             success: false,
             message: 'Error updating income source',
@@ -123,7 +124,7 @@ exports.downloadIncomeExcel = async (req, res) => {
         res.setHeader('Content-Disposition', 'attachment; filename=income_details.xlsx');
         res.send(buffer);
     } catch (error) {
-        console.error(error);
+        logger.error(error.message, error);
         res.status(500).json({
             success: false,
             message: 'Error downloading income sources',
@@ -152,7 +153,7 @@ exports.deleteIncome = async (req, res) => {
             message: 'Income source moved to Archived Transactions',
         });
     } catch (error) {
-        console.error(error);
+        logger.error(error.message, error);
         res.status(500).json({
             success: false,
             message: 'Error deleting income source',
@@ -172,7 +173,7 @@ exports.getDeletedIncome = async (req, res) => {
             data: income,
         });
     } catch (error) {
-        console.error(error);
+        logger.error(error.message, error);
         res.status(500).json({
             success: false,
             message: 'Error fetching deleted income sources',
@@ -203,7 +204,7 @@ exports.restoreIncome = async (req, res) => {
             data: income,
         });
     } catch (error) {
-        console.error(error);
+        logger.error(error.message, error);
         res.status(500).json({
             success: false,
             message: 'Error restoring income source',
@@ -233,7 +234,7 @@ exports.permanentDeleteIncome = async (req, res) => {
             message: 'Income source permanently deleted',
         });
     } catch (error) {
-        console.error(error);
+        logger.error(error.message, error);
         res.status(500).json({
             success: false,
             message: 'Error permanently deleting income source',

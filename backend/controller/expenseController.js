@@ -1,6 +1,7 @@
 const Expense = require('../models/Expense');
 const xlsx = require('xlsx');
 const path = require('path');
+const logger = require('../utils/logger');
 
 // ADD EXPENSE
 exports.addExpense = async (req, res) => {
@@ -30,7 +31,7 @@ exports.addExpense = async (req, res) => {
             data: newExpense,
         });
     } catch (error) {
-        console.error(error);
+        logger.error(error.message, error);
         res.status(500).json({
             success: false,
             message: 'Error adding expense category',
@@ -50,7 +51,7 @@ exports.getAllExpense = async (req, res) => {
             data: expense,
         });
     } catch (error) {
-        console.error(error);
+        logger.error(error.message, error);
         res.status(500).json({
             success: false,
             message: 'Error fetching expense category',
@@ -90,7 +91,7 @@ exports.updateExpense = async (req, res) => {
             data: updatedExpense,
         });
     } catch (error) {
-        console.error(error);
+        logger.error(error.message, error);
         res.status(500).json({
             success: false,
             message: 'Error updating expense category',
@@ -123,7 +124,7 @@ exports.downloadExpenseExcel = async (req, res) => {
         res.setHeader('Content-Disposition', 'attachment; filename=expense_details.xlsx');
         res.send(buffer);
     } catch (error) {
-        console.error(error);
+        logger.error(error.message, error);
         res.status(500).json({
             success: false,
             message: 'Error downloading expense category',
@@ -152,7 +153,7 @@ exports.deleteExpense = async (req, res) => {
             message: 'Expense category moved to Archived Transactions',
         });
     } catch (error) {
-        console.error(error);
+        logger.error(error.message, error);
         res.status(500).json({
             success: false,
             message: 'Error deleting expense category',
@@ -172,7 +173,7 @@ exports.getDeletedExpense = async (req, res) => {
             data: expense,
         });
     } catch (error) {
-        console.error(error);
+        logger.error(error.message, error);
         res.status(500).json({
             success: false,
             message: 'Error fetching deleted expenses',
@@ -203,7 +204,7 @@ exports.restoreExpense = async (req, res) => {
             data: expense,
         });
     } catch (error) {
-        console.error(error);
+        logger.error(error.message, error);
         res.status(500).json({
             success: false,
             message: 'Error restoring expense',
@@ -233,7 +234,7 @@ exports.permanentDeleteExpense = async (req, res) => {
             message: 'Expense permanently deleted',
         });
     } catch (error) {
-        console.error(error);
+        logger.error(error.message, error);
         res.status(500).json({
             success: false,
             message: 'Error permanently deleting expense',

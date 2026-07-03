@@ -4,6 +4,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const mongoose = require('mongoose');
+const helmet = require('helmet');
 
 const connectDB = require('./config/db');
 const logger = require('./utils/logger');
@@ -21,7 +22,7 @@ const feedbackRoutes = require('./routes/feedbackRoutes');
 
 const app = express();
 
-// Trust reverse proxy (Render) to correctly identify client IPs and protocols (HTTP vs HTTPS)
+// Trust reverse proxy (Render/Railway/VPS) to correctly identify client IPs
 app.set('trust proxy', 1);
 
 // Ensure uploads and downloads directories exist
@@ -30,10 +31,16 @@ const downloadsDir = path.join(__dirname, 'downloads');
 if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir, { recursive: true });
 if (!fs.existsSync(downloadsDir)) fs.mkdirSync(downloadsDir, { recursive: true });
 
-// Enable CORS securely for multiple origins
-const allowedOrigins = [
-    'http://localhost:5173'
-];
+// ─── Helmet: HTTP Security Headers ───────────────────────────────────────────
+app.use(
+    helmet({
+        crossOriginResourcePolicy: { policy: 'cross-origin' }, // Allow serving uploaded images cross-origin
+        contentSecurityPolicy: false, // Disabled — frontend handles its own CSP via Vite/meta tags
+    })
+);
+
+// ─── CORS ─────────────────────────────────────────────────────────────────────
+const allowedOrigins = ['http://localhost:5173'];
 if (process.env.CLIENT_URL) {
     allowedOrigins.push(process.env.CLIENT_URL.replace(/\/$/, ''));
 }
@@ -42,7 +49,7 @@ const uniqueAllowedOrigins = [...new Set(allowedOrigins)];
 app.use(
     cors({
         origin: function (origin, callback) {
-            // Allow requests with no origin (like mobile apps, postman, curl)
+            // Allow requests with no origin (mobile apps, Postman, cURL)
             if (!origin) return callback(null, true);
             if (uniqueAllowedOrigins.indexOf(origin) !== -1 || origin.startsWith('http://localhost:')) {
                 return callback(null, true);
@@ -56,25 +63,25 @@ app.use(
     })
 );
 
-// Body Parsers & Cookie Parser
-app.use(express.json({ limit: '10kb' })); // Rate limiting request body sizes
+// ─── Body Parsers & Cookie Parser ─────────────────────────────────────────────
+app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true, limit: '10kb' }));
 app.use(cookieParser);
 
-// Prevent NoSQL Injection & XSS attacks
+// ─── Prevent NoSQL Injection & XSS ───────────────────────────────────────────
 app.use(sanitizeInput);
 
-// Static uploads folder
+// ─── Static uploads folder ────────────────────────────────────────────────────
 app.use('/uploads', express.static(uploadsDir));
 
-// Route handlers
+// ─── Route Handlers ───────────────────────────────────────────────────────────
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/income', incomeRoutes);
 app.use('/api/v1/expense', expenseRoutes);
 app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/feedback', feedbackRoutes);
 
-// Health Check Endpoint
+// ─── Health Check Endpoint ────────────────────────────────────────────────────
 app.get('/api/v1/health', async (req, res) => {
     const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
     res.status(200).json({
@@ -86,32 +93,35 @@ app.get('/api/v1/health', async (req, res) => {
     });
 });
 
-// Diagnostic SMTP Email Test Endpoint
+// ─── Diagnostic SMTP Test — ADMIN ONLY (dev/internal use) ────────────────────
+// Protected: only accessible when a valid ADMIN_SECRET header is sent
 app.get('/api/v1/health/test-email', async (req, res) => {
+    const adminSecret = process.env.ADMIN_SECRET;
+    const providedSecret = req.headers['x-admin-secret'];
+
+    if (!adminSecret || providedSecret !== adminSecret) {
+        return res.status(403).json({ success: false, message: 'Forbidden' });
+    }
+
     const { sendEmail } = require('./utils/emailService');
     try {
         const result = await sendEmail({
             to: process.env.SMTP_USER || 'expensifya@gmail.com',
             subject: 'Expensify - SMTP Test Email',
-            text: 'This is a test email to verify that SMTP is configured correctly on Render.',
-            html: '<p>This is a test email to verify that SMTP is configured correctly on Render.</p>',
+            text: 'This is a test email to verify that SMTP is configured correctly.',
+            html: '<p>This is a test email to verify that SMTP is configured correctly.</p>',
         });
-        res.status(200).json({
-            success: true,
-            message: 'Test email request processed.',
-            result
-        });
+        res.status(200).json({ success: true, message: 'Test email request processed.', result });
     } catch (error) {
         res.status(500).json({
             success: false,
             message: 'Failed to execute test email call',
             error: error.message,
-            stack: error.stack
         });
     }
 });
 
-// Centralized Error Handling Middleware
+// ─── Centralized Error Handling Middleware ────────────────────────────────────
 app.use((err, req, res, next) => {
     logger.error(`Unhandled Error: ${err.message}`, err);
     res.status(err.status || 500).json({
@@ -125,5 +135,5 @@ const PORT = process.env.PORT || 8000;
 connectDB();
 
 app.listen(PORT, () => {
-    logger.info(`Server is running in production readiness mode on port ${PORT}`);
+    logger.info(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
 });

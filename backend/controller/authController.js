@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const crypto = require('crypto');
 const Expense = require('../models/Expense');
 const Income = require('../models/Income');
 const jwt = require('jsonwebtoken');
@@ -80,8 +81,8 @@ exports.registerUser = async (req, res) => {
             });
         }
 
-        // Generate email verification code (6-digit)
-        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+        // Generate cryptographically secure 6-digit OTP
+        const verificationCode = crypto.randomInt(100000, 1000000).toString();
         const verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
         let user;
@@ -258,33 +259,13 @@ exports.loginUser = async (req, res) => {
         user.lockUntil = null;
         await user.save();
 
-        // Check if email is verified
+        // Block unverified users — they must verify via the OTP they received during signup
         if (!user.isVerified) {
-            // Regenerate code and resend verification email
-            const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-            user.verificationCode = verificationCode;
-            user.verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-            await user.save();
-
-            await sendEmail({
-                to: user.email,
-                subject: 'Verify Your Expensify Account',
-                text: `Your email verification code is: ${verificationCode}. It is valid for 10 minutes.`,
-                html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-                        <h2 style="color: #7c3aed; text-align: center;">Verify Your Expensify Account</h2>
-                        <p>Your email address is not verified. Please verify your email using the code below to log in:</p>
-                        <div style="background-color: #f3f4f6; padding: 15px; text-align: center; border-radius: 8px; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #111827; margin: 20px 0;">
-                            ${verificationCode}
-                        </div>
-                        <p style="color: #ef4444; font-weight: 500;">Note: This verification code is valid for 10 minutes only.</p>
-                       </div>`,
-            });
-
+            logger.warn(`Login attempt by unverified user: ${user.email}`);
             return res.status(403).json({
                 success: false,
                 isVerified: false,
-                message: 'Your email address is not verified. A verification code has been sent to your email.',
-                email: user.email
+                message: 'Please verify your email first. Check your inbox for the verification code sent during signup.',
             });
         }
 
@@ -363,7 +344,7 @@ exports.forgotPassword = async (req, res) => {
             });
         }
 
-        const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const resetCode = crypto.randomInt(100000, 1000000).toString();
         user.resetCode = resetCode;
         user.resetCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins expiry
         await user.save();
@@ -670,8 +651,8 @@ exports.resendOTP = async (req, res) => {
             });
         }
 
-        // Generate secure 6-digit OTP
-        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+        // Generate cryptographically secure 6-digit OTP
+        const verificationCode = crypto.randomInt(100000, 1000000).toString();
         const verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
         user.verificationCode = verificationCode;

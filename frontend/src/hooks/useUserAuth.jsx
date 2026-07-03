@@ -18,8 +18,11 @@ export const useUserAuth = () => {
       return;
     }
 
+    // Safety net: unverified users should never have a token in normal flow.
+    // If somehow an unverified user state is in context, clear and send to login.
     if (user && !user.isVerified) {
-      navigate("/verify-otp", { state: { email: user.email } });
+      clearUser();
+      navigate('/login');
       return;
     }
 

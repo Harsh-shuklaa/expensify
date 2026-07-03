@@ -1,14 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import AuthLayout from '../../components/layouts/AuthLayout.jsx';
 import Input from '../../components/Inputs/Input.jsx';
 import { Link, useNavigate } from 'react-router-dom';
 import { validateEmail } from '../../utils/helper';
 import axiosInstance from '../../utils/axiosInstance.js';
 import { API_PATHS } from '../../utils/apiPaths.js';
-import { useContext } from 'react';
 import { UserContext } from '../../context/UserContext.jsx';
 import { trackEvent } from '../../utils/analytics';
-import toast from 'react-hot-toast';
 
 const Login = () => {
   const [email, setEmail] = useState('')
@@ -39,22 +37,21 @@ const Login = () => {
 
       const { token, user } = response.data;
 
-      if (token) {
+      if (token && user) {
         localStorage.setItem("token", token);
-        const userRes = await axiosInstance.get(API_PATHS.AUTH.GET_USER_INFO);
-        updateUser(userRes.data.user);
-        localStorage.setItem("user", JSON.stringify(userRes.data.user));
+        localStorage.setItem("user", JSON.stringify(user));
+        updateUser(user);
         trackEvent("login", "Authentication", email);
         navigate("/dashboard");
       }
     } catch (error) {
       if (error.response && error.response.status === 403 && error.response.data.isVerified === false) {
-        toast.error(error.response.data.message || "Please verify your email address.");
-        navigate("/verify-otp", { state: { email: error.response.data.email || email } });
+        // Unverified user — show error inline, never redirect to OTP from login
+        setError('Your email is not verified. Please sign up first and complete the OTP verification.');
       } else if (error.response && error.response.data.message) {
         setError(error.response.data.message);
       } else {
-        setError("Something went wrong. Please try again.");
+        setError('Something went wrong. Please try again.');
       }
     }
   }
