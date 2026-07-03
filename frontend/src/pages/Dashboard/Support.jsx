@@ -6,8 +6,10 @@ import { API_PATHS } from '../../utils/apiPaths';
 import toast from 'react-hot-toast';
 import { LuCircleHelp, LuBug, LuMessageSquare, LuSparkles } from 'react-icons/lu';
 import { trackEvent } from '../../utils/analytics';
+import { useUserAuth } from '../../hooks/useUserAuth';
 
 const Support = () => {
+    useUserAuth();
     const { user } = useContext(UserContext);
     const [activeTab, setActiveTab] = useState('contact'); // contact, bug, feedback, feature
 

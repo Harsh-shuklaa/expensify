@@ -12,12 +12,11 @@ if (!fs.existsSync(logsDir)) {
 
 // SMTP credentials check
 const isSmtpConfigured = () => {
-  return !!(
-    process.env.SMTP_HOST &&
-    process.env.SMTP_PORT &&
-    process.env.SMTP_USER &&
-    process.env.SMTP_PASS
-  );
+  const host = (process.env.SMTP_HOST || '').replace(/^["']|["']$/g, '');
+  const port = (process.env.SMTP_PORT || '').replace(/^["']|["']$/g, '');
+  const user = (process.env.SMTP_USER || '').replace(/^["']|["']$/g, '');
+  const pass = (process.env.SMTP_PASS || '').replace(/^["']|["']$/g, '');
+  return !!(host && port && user && pass);
 };
 
 
@@ -107,18 +106,25 @@ const sendEmail = async ({ to, subject, html, text }) => {
   // 2. Try Standard SMTP if configured
   if (nodemailer && isSmtpConfigured()) {
     try {
+      const host = (process.env.SMTP_HOST || '').replace(/^["']|["']$/g, '');
+      const port = parseInt((process.env.SMTP_PORT || '587').replace(/^["']|["']$/g, ''));
+      const secure = (process.env.SMTP_SECURE || 'false').replace(/^["']|["']$/g, '') === 'true';
+      const user = (process.env.SMTP_USER || '').replace(/^["']|["']$/g, '');
+      const pass = (process.env.SMTP_PASS || '').replace(/^["']|["']$/g, '');
+      const from = (process.env.SMTP_FROM || '').replace(/^["']|["']$/g, '');
+
       const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT),
-        secure: process.env.SMTP_SECURE === 'true',
+        host,
+        port,
+        secure,
         auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
+          user,
+          pass,
         },
       });
 
       const mailOptions = {
-        from: process.env.SMTP_FROM || '"Expensify Support" <expensifya@gmail.com>',
+        from: from || `"Expensify Support" <${user}>`,
         to,
         subject,
         text,

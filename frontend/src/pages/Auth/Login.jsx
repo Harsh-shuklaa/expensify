@@ -8,6 +8,7 @@ import { API_PATHS } from '../../utils/apiPaths.js';
 import { useContext } from 'react';
 import { UserContext } from '../../context/UserContext.jsx';
 import { trackEvent } from '../../utils/analytics';
+import toast from 'react-hot-toast';
 
 const Login = () => {
   const [email, setEmail] = useState('')
@@ -47,7 +48,10 @@ const Login = () => {
         navigate("/dashboard");
       }
     } catch (error) {
-      if (error.response && error.response.data.message) {
+      if (error.response && error.response.status === 403 && error.response.data.isVerified === false) {
+        toast.error(error.response.data.message || "Please verify your email address.");
+        navigate("/verify-otp", { state: { email: error.response.data.email || email } });
+      } else if (error.response && error.response.data.message) {
         setError(error.response.data.message);
       } else {
         setError("Something went wrong. Please try again.");

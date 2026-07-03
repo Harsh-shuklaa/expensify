@@ -15,6 +15,7 @@ const EditProfileModal = ({ isOpen, onClose }) => {
   const [profilePic, setProfilePic] = useState(null);
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [changePasswordMode, setChangePasswordMode] = useState(false);
 
@@ -24,6 +25,7 @@ const EditProfileModal = ({ isOpen, onClose }) => {
       setProfilePic(null);
       setCurrentPassword("");
       setNewPassword("");
+      setConfirmPassword("");
       setChangePasswordMode(false);
     }
   }, [isOpen, user]);
@@ -32,6 +34,31 @@ const EditProfileModal = ({ isOpen, onClose }) => {
     if (!fullname.trim()) {
       toast.error("Name is required.");
       return;
+    }
+
+    // Validate password change parameters if enabled
+    if (changePasswordMode) {
+      if (!currentPassword) {
+        toast.error("Current password is required.");
+        return;
+      }
+      if (!newPassword) {
+        toast.error("New password is required.");
+        return;
+      }
+      if (!confirmPassword) {
+        toast.error("Confirm new password is required.");
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        toast.error("New password and confirm password do not match.");
+        return;
+      }
+      const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&]{8,}$/;
+      if (!passwordRegex.test(newPassword)) {
+        toast.error("Password must be at least 8 characters long and contain both letters and numbers.");
+        return;
+      }
     }
 
     setLoading(true);
@@ -73,6 +100,10 @@ const EditProfileModal = ({ isOpen, onClose }) => {
           newPassword,
         });
         toast.success("Password changed successfully");
+        setCurrentPassword('');
+        setNewPassword('');
+        setConfirmPassword('');
+        setChangePasswordMode(false);
       }
 
       onClose();
@@ -165,6 +196,13 @@ const EditProfileModal = ({ isOpen, onClose }) => {
                 onChange={({ target }) => setNewPassword(target.value)}
                 label="New Password"
                 placeholder="Min 8 characters"
+              />
+              <Input
+                type="password"
+                value={confirmPassword}
+                onChange={({ target }) => setConfirmPassword(target.value)}
+                label="Confirm New Password"
+                placeholder="Confirm new password"
               />
             </div>
           )}

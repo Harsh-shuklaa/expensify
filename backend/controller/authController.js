@@ -82,7 +82,7 @@ exports.registerUser = async (req, res) => {
 
         // Generate email verification code (6-digit)
         const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
-        const verificationCodeExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+        const verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
         let user;
         try {
@@ -101,10 +101,18 @@ exports.registerUser = async (req, res) => {
             await sendEmail({
                 to: user.email,
                 subject: 'Verify Your Expensify Account',
-                text: `Welcome to Expensify! Your email verification code is: ${verificationCode}. It is valid for 24 hours.`,
-                html: `<h3>Welcome to Expensify!</h3>
-                       <p>Your verification code is: <strong>${verificationCode}</strong></p>
-                       <p>This code will expire in 24 hours.</p>`,
+                text: `Welcome to Expensify! Your email verification code is: ${verificationCode}. It is valid for 10 minutes.`,
+                html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                        <h2 style="color: #7c3aed; text-align: center;">Welcome to Expensify!</h2>
+                        <p>Thank you for signing up. Please verify your email using the verification code below:</p>
+                        <div style="background-color: #f3f4f6; padding: 15px; text-align: center; border-radius: 8px; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #111827; margin: 20px 0;">
+                            ${verificationCode}
+                        </div>
+                        <p style="color: #ef4444; font-weight: 500;">Note: This verification code is valid for 10 minutes only.</p>
+                        <p style="font-size: 12px; color: #6b7280; margin-top: 30px; border-top: 1px solid #eee; padding-top: 10px;">
+                            If you did not request this email, please ignore it.
+                        </p>
+                       </div>`,
             });
 
             logger.info(`User registered successfully: ${user.email}`);
@@ -255,14 +263,21 @@ exports.loginUser = async (req, res) => {
             // Regenerate code and resend verification email
             const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
             user.verificationCode = verificationCode;
-            user.verificationCodeExpires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+            user.verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
             await user.save();
 
             await sendEmail({
                 to: user.email,
                 subject: 'Verify Your Expensify Account',
-                text: `Your email verification code is: ${verificationCode}. It is valid for 24 hours.`,
-                html: `<p>Your verification code is: <strong>${verificationCode}</strong></p>`,
+                text: `Your email verification code is: ${verificationCode}. It is valid for 10 minutes.`,
+                html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                        <h2 style="color: #7c3aed; text-align: center;">Verify Your Expensify Account</h2>
+                        <p>Your email address is not verified. Please verify your email using the code below to log in:</p>
+                        <div style="background-color: #f3f4f6; padding: 15px; text-align: center; border-radius: 8px; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #111827; margin: 20px 0;">
+                            ${verificationCode}
+                        </div>
+                        <p style="color: #ef4444; font-weight: 500;">Note: This verification code is valid for 10 minutes only.</p>
+                       </div>`,
             });
 
             return res.status(403).json({
@@ -438,7 +453,7 @@ exports.logoutUser = async (req, res) => {
 // Get User Info
 exports.getUserInfo = async (req, res) => {
     try {
-        const user = await User.findById(req.user.id).select('-password');
+        const user = await User.findById(req.user._id).select('-password');
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -469,7 +484,7 @@ exports.updateProfile = async (req, res) => {
         if (profileImageUrl !== undefined) updateData.profileImageUrl = profileImageUrl;
 
         const user = await User.findByIdAndUpdate(
-            req.user.id,
+            req.user._id,
             updateData,
             { new: true }
         ).select('-password');
@@ -515,7 +530,7 @@ exports.changePassword = async (req, res) => {
             });
         }
 
-        const user = await User.findById(req.user.id);
+        const user = await User.findById(req.user._id);
         if (!user) {
             return res.status(404).json({
                 success: false,
@@ -625,5 +640,71 @@ exports.deleteAccount = async (req, res) => {
     } catch (error) {
         logger.error('Error deleting account:', error);
         res.status(500).json({ success: false, message: 'Failed to permanently delete your account' });
+    }
+};
+
+// Resend Verification OTP
+exports.resendOTP = async (req, res) => {
+    try {
+        const { email } = req.body || {};
+
+        if (!email) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide email address',
+            });
+        }
+
+        const user = await User.findOne({ email: email.toLowerCase() });
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found',
+            });
+        }
+
+        if (user.isVerified) {
+            return res.status(400).json({
+                success: false,
+                message: 'Email is already verified',
+            });
+        }
+
+        // Generate secure 6-digit OTP
+        const verificationCode = Math.floor(100000 + Math.random() * 900000).toString();
+        const verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+
+        user.verificationCode = verificationCode;
+        user.verificationCodeExpires = verificationCodeExpires;
+        await user.save();
+
+        // Send Email
+        await sendEmail({
+            to: user.email,
+            subject: 'Verify Your Expensify Account',
+            text: `Welcome back to Expensify! Your email verification code is: ${verificationCode}. It is valid for 10 minutes.`,
+            html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                    <h2 style="color: #7c3aed; text-align: center;">Verify Your Expensify Account</h2>
+                    <p>Here is your new verification code to complete registration:</p>
+                    <div style="background-color: #f3f4f6; padding: 15px; text-align: center; border-radius: 8px; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #111827; margin: 20px 0;">
+                        ${verificationCode}
+                    </div>
+                    <p style="color: #ef4444; font-weight: 500;">Note: This verification code is valid for 10 minutes only.</p>
+                   </div>`,
+        });
+
+        logger.info(`Verification OTP resent successfully to: ${user.email}`);
+
+        res.status(200).json({
+            success: true,
+            message: 'A new verification OTP has been sent to your email.',
+        });
+    } catch (error) {
+        logger.error('Error resending OTP:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error resending OTP',
+            error: error.message,
+        });
     }
 };

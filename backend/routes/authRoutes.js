@@ -7,6 +7,7 @@ const {
     registerUser,
     loginUser,
     verifyEmail,
+    resendOTP,
     forgotPassword,
     resetPassword,
     refreshToken,
@@ -55,6 +56,7 @@ const resetPasswordLimiter = rateLimiter({
 router.post('/register', signupLimiter, registerUser);
 router.post('/login', loginLimiter, loginUser);
 router.post('/verify-email', verifyEmailLimiter, verifyEmail);
+router.post('/resend-otp', verifyEmailLimiter, resendOTP);
 router.post('/forgot-password', forgotPasswordLimiter, forgotPassword);
 router.post('/reset-password', resetPasswordLimiter, resetPassword);
 router.post('/refresh-token', refreshToken);
@@ -63,7 +65,10 @@ router.post('/logout', logoutUser);
 // User Profile routes
 router.get('/getUser', Protect, getUserInfo);
 router.patch('/update-profile', Protect, updateProfile);
+router.put('/profile', Protect, updateProfile);
+router.patch('/profile', Protect, updateProfile);
 router.patch('/change-password', Protect, changePassword);
+router.put('/change-password', Protect, changePassword);
 
 // Image Upload
 router.post('/upload-image', Protect, upload.single('profileImage'), async (req, res) => {

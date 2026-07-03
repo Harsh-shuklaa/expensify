@@ -7,11 +7,23 @@ import {API_PATHS}  from "../utils/apiPaths"
 
 
 export const useUserAuth = () => {
-  const { user, updateUser, clearUser } = useContext(UserContext); // ❌ 'cleanUser' → ✅ 'clearUser'
+  const { user, updateUser, clearUser } = useContext(UserContext);
   const navigate = useNavigate();
 
   useEffect(() => {
-    if (user) return; // ✅ If user already exists, no need to fetch
+    const token = localStorage.getItem('token');
+    if (!token) {
+      clearUser();
+      navigate("/login");
+      return;
+    }
+
+    if (user && !user.isVerified) {
+      navigate("/verify-otp", { state: { email: user.email } });
+      return;
+    }
+
+    if (user) return; // If user already exists and is verified, no need to fetch
 
     let isMounted = true;
 
@@ -20,12 +32,16 @@ export const useUserAuth = () => {
         const response = await axiosInstance.get(API_PATHS.AUTH.GET_USER_INFO);
 
         if (isMounted && response.data) {
-          updateUser(response.data);
+          const userData = response.data.user || response.data;
+          updateUser(userData);
+          if (userData && !userData.isVerified) {
+            navigate("/verify-otp", { state: { email: userData.email } });
+          }
         }
       } catch (err) {
         console.log("Failed to fetch user info:", err);
         if (isMounted) {
-          clearUser(); // ✅ was 'cleanUser', now corrected
+          clearUser();
           navigate("/login");
         }
       }
@@ -36,5 +52,5 @@ export const useUserAuth = () => {
     return () => {
       isMounted = false; // cleanup
     };
-  }, [user, updateUser, clearUser, navigate]); // ✅ added 'user' in dependency array
+  }, [user, updateUser, clearUser, navigate]);
 };

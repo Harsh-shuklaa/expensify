@@ -61,7 +61,7 @@ const SignUp = () => {
 
       if (response.data && response.data.success) {
         trackEvent("signup_initiated", "Authentication", email);
-        navigate("/verify-email", { state: { email } });
+        navigate("/verify-otp", { state: { email } });
       }
     } catch (error) {
       if (error.response && error.response.data.message) {

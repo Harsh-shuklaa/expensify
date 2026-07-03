@@ -9,13 +9,16 @@ import uploadImage from '../../utils/uploadImage';
 import toast from 'react-hot-toast';
 import { trackEvent, initGA } from '../../utils/analytics';
 import { LuUser, LuKey, LuCookie, LuDatabase } from 'react-icons/lu';
+import { useUserAuth } from '../../hooks/useUserAuth';
 
 const Settings = () => {
+  useUserAuth();
   const { user, updateUser } = useContext(UserContext);
   const [fullname, setFullname] = useState(user?.fullname || '');
   const [profilePic, setProfilePic] = useState(null);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [changePasswordMode, setChangePasswordMode] = useState(false);
 
@@ -35,6 +38,31 @@ const Settings = () => {
     if (!fullname.trim()) {
       toast.error("Name is required.");
       return;
+    }
+
+    // Validate password change parameters if enabled
+    if (changePasswordMode) {
+      if (!currentPassword) {
+        toast.error("Current password is required.");
+        return;
+      }
+      if (!newPassword) {
+        toast.error("New password is required.");
+        return;
+      }
+      if (!confirmPassword) {
+        toast.error("Confirm new password is required.");
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        toast.error("New password and confirm password do not match.");
+        return;
+      }
+      const passwordRegex = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d@$!%*#?&]{8,}$/;
+      if (!passwordRegex.test(newPassword)) {
+        toast.error("Password must be at least 8 characters long and contain both letters and numbers.");
+        return;
+      }
     }
 
     setLoading(true);
@@ -76,6 +104,7 @@ const Settings = () => {
         toast.success("Password changed successfully");
         setCurrentPassword('');
         setNewPassword('');
+        setConfirmPassword('');
         setChangePasswordMode(false);
       }
     } catch (error) {
@@ -210,6 +239,15 @@ const Settings = () => {
                       label="New Password"
                       placeholder="Min 8 characters"
                     />
+                    <div className="col-span-1 md:col-span-2">
+                      <Input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={({ target }) => setConfirmPassword(target.value)}
+                        label="Confirm New Password"
+                        placeholder="Confirm new password"
+                      />
+                    </div>
                   </div>
                 )}
               </div>

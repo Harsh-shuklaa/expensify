@@ -8,7 +8,7 @@ import { UserContext } from '../../context/UserContext.jsx';
 import toast from 'react-hot-toast';
 import { trackEvent } from '../../utils/analytics';
 
-const VerifyEmail = () => {
+const VerifyOtp = () => {
     const location = useLocation();
     const navigate = useNavigate();
     const { updateUser } = useContext(UserContext);
@@ -17,6 +17,7 @@ const VerifyEmail = () => {
     const [code, setCode] = useState('');
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [resending, setResending] = useState(false);
 
     const handleVerify = async (e) => {
         e.preventDefault();
@@ -60,6 +61,31 @@ const VerifyEmail = () => {
         }
     };
 
+    const handleResendOtp = async () => {
+        if (!email) {
+            setError('Please enter your email address to resend OTP');
+            return;
+        }
+        setError('');
+        setResending(true);
+
+        try {
+            const response = await axiosInstance.post(API_PATHS.AUTH.RESEND_OTP, {
+                email
+            });
+
+            if (response.data && response.data.success) {
+                toast.success(response.data.message || 'Verification OTP has been resent to your email.');
+            }
+        } catch (error) {
+            const errorMsg = error.response?.data?.message || 'Failed to resend OTP. Please try again.';
+            setError(errorMsg);
+            toast.error(errorMsg);
+        } finally {
+            setResending(false);
+        }
+    };
+
     return (
         <AuthLayout>
             <div className="lg:w-[70%] h-3/4 md:h-full flex flex-col justify-center">
@@ -90,8 +116,19 @@ const VerifyEmail = () => {
                         type="text"
                     />
 
+                    <div className="flex justify-end mt-1 mb-4">
+                        <button
+                            type="button"
+                            disabled={resending || loading}
+                            onClick={handleResendOtp}
+                            className="text-[12px] font-medium text-primary underline disabled:opacity-50"
+                        >
+                            {resending ? 'Sending...' : 'Resend Verification Code'}
+                        </button>
+                    </div>
+
                     {error && <p className="text-red-500 text-xs pb-2.5">{error}</p>}
-                    <button type="submit" disabled={loading} className="btn-primary">
+                    <button type="submit" disabled={loading || resending} className="btn-primary">
                         {loading ? 'VERIFYING...' : 'VERIFY EMAIL'}
                     </button>
                 </form>
@@ -100,4 +137,4 @@ const VerifyEmail = () => {
     );
 };
 
-export default VerifyEmail;
+export default VerifyOtp;

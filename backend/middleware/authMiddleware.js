@@ -25,6 +25,14 @@ exports.Protect = async (req, res, next) => {
             return res.status(401).json({ message: 'User not found' });
         }
 
+        if (!user.isVerified) {
+            return res.status(403).json({
+                success: false,
+                isVerified: false,
+                message: 'Please verify your email address to access this resource.'
+            });
+        }
+
         req.user = user;
         next();
     } catch (error) {

@@ -10,7 +10,7 @@ import {
 
 import Login from './pages/Auth/Login';
 import Signup from './pages/Auth/Signup';
-import VerifyEmail from './pages/Auth/VerifyEmail';
+import VerifyOtp from './pages/Auth/VerifyOtp';
 import ForgotPassword from './pages/Auth/ForgotPassword';
 import ResetPassword from './pages/Auth/ResetPassword';
 
@@ -54,7 +54,7 @@ const App = () => {
             <Route path='/' element={<Root />} />
             <Route path='/login' exact element={<Login />} />
             <Route path='/signup' element={<Signup />} />
-            <Route path='/verify-email' element={<VerifyEmail />} />
+            <Route path='/verify-otp' element={<VerifyOtp />} />
             <Route path='/forgot-password' element={<ForgotPassword />} />
             <Route path='/reset-password' element={<ResetPassword />} />
             <Route path='/dashboard' element={<Home />} />
@@ -93,8 +93,13 @@ export default App;
 
 const Root = () => {
   const isAuthenticated = !!localStorage.getItem('token');
+  const user = JSON.parse(localStorage.getItem('user') || 'null');
 
-  return isAuthenticated ?
-    (<Navigate to='/dashboard' />) :
-    (<Navigate to='/login' />);
+  if (!isAuthenticated) {
+    return <Navigate to='/login' />;
+  }
+  if (user && !user.isVerified) {
+    return <Navigate to='/verify-otp' state={{ email: user.email }} />;
+  }
+  return <Navigate to='/dashboard' />;
 };
