@@ -21,7 +21,7 @@ const StatsInfoCard = ({ icon, label, value, color }) => {
 const AuthLayout = ({ children }) => {
   return (
     <div className='flex min-h-screen bg-white dark:bg-slate-900'>
-      <div className='w-screen h-screen md:w-[60vw] px-12 pt-8 pb-12 flex flex-col justify-between overflow-y-auto'>
+      <div className='w-full md:w-[60vw] min-h-screen px-6 md:px-12 py-8 flex flex-col justify-between overflow-y-auto'>
         <div>
           <div className="flex items-center gap-2 mb-2">
             <img src={LOGO} alt="Expensify Logo" className="w-8 h-8 rounded-lg" />

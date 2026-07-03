@@ -22,14 +22,14 @@ const IncomeOverview = ({ transactions, onAddIncome }) => {
 
   return (
     <div className="card">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
         <div>
           <h5 className="text-lg dark:text-white">Income Overview</h5>
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+          <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
             Track your earnings over time and analyze your income trends.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 shrink-0">
           <DateRangeFilter value={range} onChange={setRange} />
           <button className="add-btn" onClick={onAddIncome}>
             <LuPlus className="text-lg" />

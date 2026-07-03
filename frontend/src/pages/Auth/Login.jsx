@@ -61,7 +61,7 @@ const Login = () => {
 
   return (
     <AuthLayout>
-      <div className="lg:w-[70%] h-3/4 md:h-full flex flex-col justify-center">
+      <div className="w-full lg:w-[70%] h-auto md:h-full flex flex-col justify-center my-6 lg:my-0 lg:ml-20 lg:mr-20">
         <h3 className="text-xl font-semibold text-black dark:text-white">Welcome Back</h3>
         <p className="text-xs text-slate-700 dark:text-slate-400 mt-[5px] mb-6">
           Please enter your details to log in

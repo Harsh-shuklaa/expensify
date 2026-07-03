@@ -124,7 +124,15 @@ const Expense = () => {
 
   useEffect(() => {
     fetchExpenseDetails();
-    return () => { };
+    
+    const handleRefresh = () => {
+      fetchExpenseDetails();
+    };
+    window.addEventListener('transaction-added', handleRefresh);
+    
+    return () => {
+      window.removeEventListener('transaction-added', handleRefresh);
+    };
   }, []);
 
   return (

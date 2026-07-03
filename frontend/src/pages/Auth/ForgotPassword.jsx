@@ -43,7 +43,7 @@ const ForgotPassword = () => {
 
     return (
         <AuthLayout>
-            <div className="lg:w-[70%] h-3/4 md:h-full flex flex-col justify-center">
+            <div className="w-full lg:w-[70%] h-auto md:h-full flex flex-col justify-center my-6 lg:my-0">
                 <h3 className="text-xl font-semibold text-black dark:text-white">Forgot Password</h3>
                 <p className="text-xs text-slate-700 dark:text-slate-400 mt-[5px] mb-6">
                     Enter your email address and we'll send you a code to reset your password.

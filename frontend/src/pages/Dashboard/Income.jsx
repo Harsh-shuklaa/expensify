@@ -122,7 +122,15 @@ const Income = () => {
 
   useEffect(() => {
     fetchIncomeDetails();
-    return () => { };
+    
+    const handleRefresh = () => {
+      fetchIncomeDetails();
+    };
+    window.addEventListener('transaction-added', handleRefresh);
+    
+    return () => {
+      window.removeEventListener('transaction-added', handleRefresh);
+    };
   }, []);
 
   return (

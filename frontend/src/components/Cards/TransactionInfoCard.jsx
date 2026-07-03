@@ -34,10 +34,10 @@ const TransactionInfoCard = ({
         )}
       </div>
 
-      <div className='flex-1 flex items-center justify-between'>
-        <div>
-          <p className='text-sm text-gray-700 dark:text-gray-200 font-medium'>{title}</p>
-          <p className='text-xs text-gray-400 dark:text-gray-500 mt-1'>{date}</p>
+      <div className='flex-1 min-w-0 flex items-center justify-between gap-2'>
+        <div className="min-w-0 flex-1">
+          <p className='text-sm text-gray-700 dark:text-gray-200 font-medium truncate' title={title}>{title}</p>
+          <p className='text-xs text-slate-400 dark:text-slate-500 mt-0.5'>{date}</p>
         </div>
 
         <div className='flex items-center gap-2'>

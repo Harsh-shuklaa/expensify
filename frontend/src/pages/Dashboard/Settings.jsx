@@ -1,37 +1,45 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useContext, useState, useEffect } from 'react';
 import DashboardLayout from '../../components/layouts/DashboardLayout';
+import { UserContext } from '../../context/UserContext.jsx';
+import { useUserAuth } from '../../hooks/useUserAuth';
 import Input from '../../components/Inputs/Input';
-import ProfilePhotoSelector from '../../components/Inputs/ProfilePhotoSelector';
-import { UserContext } from '../../context/UserContext';
 import axiosInstance from '../../utils/axiosInstance';
 import { API_PATHS } from '../../utils/apiPaths';
 import uploadImage from '../../utils/uploadImage';
 import toast from 'react-hot-toast';
-import { trackEvent, initGA } from '../../utils/analytics';
-import { LuUser, LuKey, LuCookie, LuDatabase } from 'react-icons/lu';
-import { useUserAuth } from '../../hooks/useUserAuth';
+import { LuKey, LuUser, LuShieldAlert, LuBinary, LuUpload, LuDownload, LuTrash2, LuSave } from 'react-icons/lu';
 
 const Settings = () => {
   useUserAuth();
-  const { user, updateUser } = useContext(UserContext);
+  const { user, updateUser, clearUser } = useContext(UserContext);
   const [fullname, setFullname] = useState(user?.fullname || '');
   const [profilePic, setProfilePic] = useState(null);
+  const [profilePicPreview, setProfilePicPreview] = useState(user?.profileImageUrl || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [changePasswordMode, setChangePasswordMode] = useState(false);
-
+  
   // Cookie preference state
-  const [allowCookies, setAllowCookies] = useState(false);
+  const [allowCookies, setAllowCookies] = useState(() => {
+    return localStorage.getItem('allow-cookies') === 'true';
+  });
 
   useEffect(() => {
     if (user) {
       setFullname(user.fullname || '');
+      setProfilePicPreview(user.profileImageUrl || '');
     }
-    const consent = localStorage.getItem('cookieConsent');
-    setAllowCookies(consent === 'accepted');
   }, [user]);
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setProfilePic(file);
+      setProfilePicPreview(URL.createObjectURL(file));
+    }
+  };
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
@@ -107,27 +115,15 @@ const Settings = () => {
         setConfirmPassword('');
         setChangePasswordMode(false);
       }
+      
+      // Save cookie preference
+      localStorage.setItem('allow-cookies', allowCookies);
     } catch (error) {
       console.error("Profile update error:", error.response?.data || error.message);
       const msg = error.response?.data?.message || "Error updating profile";
       toast.error(msg);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleCookieToggle = (e) => {
-    const checked = e.target.checked;
-    setAllowCookies(checked);
-    if (checked) {
-      localStorage.setItem('cookieConsent', 'accepted');
-      initGA();
-      toast.success("Cookies & analytics enabled.");
-      trackEvent('cookie_consent_accepted', 'Settings');
-    } else {
-      localStorage.setItem('cookieConsent', 'declined');
-      toast.success("Cookies & analytics disabled.");
-      trackEvent('cookie_consent_declined', 'Settings');
     }
   };
 
@@ -145,180 +141,215 @@ const Settings = () => {
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
-      toast.success("Data exported successfully!", { id: "export-toast" });
-      trackEvent('export_data', 'GDPR');
+      toast.success("Data exported successfully", { id: "export-toast" });
     } catch (error) {
-      console.error("Export error:", error);
-      toast.error("Failed to export data", { id: "export-toast" });
+      console.error("Data export failed:", error);
+      toast.error("Failed to export compliance data", { id: "export-toast" });
     }
   };
 
   const handleDeleteAccount = async () => {
-    if (!window.confirm("Are you sure you want to PERMANENTLY delete your account? This action cannot be undone and all your financial data will be permanently wiped out under GDPR compliance.")) {
+    if (!window.confirm("ARE YOU ABSOLUTELY SURE? This permanently deletes your profile and all transaction history. This cannot be undone.")) {
       return;
     }
-
     try {
-      toast.loading("Deleting account...", { id: "delete-toast" });
       await axiosInstance.delete(API_PATHS.AUTH.DELETE_ACCOUNT);
-      toast.success("Account permanently deleted", { id: "delete-toast" });
+      toast.success("Account deleted successfully.");
       localStorage.clear();
-      window.location.href = "/login";
+      clearUser();
+      window.location.href = '/login';
     } catch (error) {
-      console.error("Deletion error:", error);
-      toast.error("Failed to delete account", { id: "delete-toast" });
+      console.error("Delete account error:", error);
+      toast.error(error.response?.data?.message || "Failed to delete account");
     }
   };
 
   return (
     <DashboardLayout activeMenu="Settings">
-      <div className="my-5 mx-auto max-w-4xl space-y-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Settings & Control Panel</h1>
-        <p className="text-xs text-gray-600 dark:text-gray-400 mb-6">
-          Manage your personal details, secure login password, cookie consents, and GDPR data portability rights.
-        </p>
+      <div className="max-w-4xl mx-auto my-3 pb-24 lg:pb-0">
+        <form onSubmit={handleUpdateProfile} className="space-y-6">
+          
+          {/* Section 1: Personal Information Card */}
+          <div className="card shadow-sm border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 rounded-2xl p-6">
+            <div className="flex items-center gap-2 mb-6 pb-3 border-b border-slate-100 dark:border-slate-800/60">
+              <LuUser className="text-primary text-lg" />
+              <h5 className="text-sm font-bold text-slate-800 dark:text-slate-100">Personal Information</h5>
+            </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {/* Left Column - Profile Details */}
-          <div className="md:col-span-2 bg-white dark:bg-slate-900 border border-gray-200/50 dark:border-slate-800/80 p-6 rounded-2xl shadow-sm space-y-5">
-            <h3 className="flex items-center gap-2 font-bold text-gray-900 dark:text-gray-100 text-sm">
-              <LuUser className="text-primary text-base" /> Profile Information
-            </h3>
-            
-            <form onSubmit={handleUpdateProfile} className="space-y-4">
-              <ProfilePhotoSelector
-                image={profilePic}
-                setImage={setProfilePic}
-                existingImageUrl={user?.profileImageUrl}
-              />
+            <div className="flex flex-col md:flex-row gap-6 items-center">
+              {/* Avatar Upload Area */}
+              <div className="relative group/upload w-24 h-24 shrink-0 cursor-pointer">
+                {profilePicPreview ? (
+                  <img
+                    src={profilePicPreview}
+                    alt="Preview"
+                    className="w-24 h-24 rounded-full object-cover border-2 border-slate-100 dark:border-slate-800"
+                  />
+                ) : (
+                  <div className="w-24 h-24 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 font-bold text-2xl border-2 border-dashed border-slate-200 dark:border-slate-700">
+                    {fullname?.[0]?.toUpperCase() || "U"}
+                  </div>
+                )}
+                <label className="absolute inset-0 bg-black/40 text-white flex flex-col items-center justify-center rounded-full opacity-0 group-hover/upload:opacity-100 transition-opacity duration-200 cursor-pointer text-[10px] font-medium">
+                  <LuUpload size={16} className="mb-1" />
+                  Upload Photo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageChange}
+                    className="hidden"
+                  />
+                </label>
+              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Form Inputs */}
+              <div className="grow w-full space-y-4">
                 <Input
                   type="text"
                   value={fullname}
                   onChange={({ target }) => setFullname(target.value)}
-                  label="Full Name"
-                  placeholder="Your name"
+                  label="Display Name"
+                  placeholder="Enter full name"
                 />
                 <div>
-                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Email Address
+                  <label className="block text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-1">
+                    Email Address (Linked & Verified)
                   </label>
                   <input
                     type="text"
-                    value={user?.email || ''}
+                    value={user?.email || ""}
                     disabled
-                    className="w-full text-xs px-4 py-2.5 rounded-lg border border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 text-gray-500 cursor-not-allowed focus:outline-none"
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200/60 dark:border-slate-800/80 rounded-xl px-4 py-2.5 text-xs font-semibold text-slate-400 dark:text-slate-500 outline-none cursor-not-allowed"
                   />
                 </div>
               </div>
-
-              {/* Password Section */}
-              <div className="border-t border-gray-200 dark:border-slate-700 pt-4 mt-4">
-                <button
-                  type="button"
-                  onClick={() => setChangePasswordMode(!changePasswordMode)}
-                  className="flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400 hover:text-purple-700 cursor-pointer font-medium transition-colors"
-                >
-                  <LuKey /> {changePasswordMode ? "Cancel Password Change" : "Change Login Password"}
-                </button>
-
-                {changePasswordMode && (
-                  <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-4 animate-fade-in">
-                    <Input
-                      type="password"
-                      value={currentPassword}
-                      onChange={({ target }) => setCurrentPassword(target.value)}
-                      label="Current Password"
-                      placeholder="Enter current password"
-                    />
-                    <Input
-                      type="password"
-                      value={newPassword}
-                      onChange={({ target }) => setNewPassword(target.value)}
-                      label="New Password"
-                      placeholder="Min 8 characters"
-                    />
-                    <div className="col-span-1 md:col-span-2">
-                      <Input
-                        type="password"
-                        value={confirmPassword}
-                        onChange={({ target }) => setConfirmPassword(target.value)}
-                        label="Confirm New Password"
-                        placeholder="Confirm new password"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-end pt-2">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="px-5 py-2 bg-primary hover:bg-primary-dark text-xs font-semibold text-white rounded-lg shadow-md shadow-primary/20 cursor-pointer disabled:opacity-50 transition-colors"
-                >
-                  {loading ? 'SAVING...' : 'SAVE CHANGES'}
-                </button>
-              </div>
-            </form>
+            </div>
           </div>
 
-          {/* Right Column - Privacy & Compliance */}
-          <div className="flex flex-col gap-6">
-            {/* Cookie Controls */}
-            <div className="bg-white dark:bg-slate-900 border border-gray-200/50 dark:border-slate-800/80 p-6 rounded-2xl shadow-sm space-y-4">
-              <h3 className="flex items-center gap-2 font-bold text-gray-900 dark:text-gray-100 text-sm">
-                <LuCookie className="text-primary text-base" /> Cookie Preferences
-              </h3>
-              <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed">
-                Allow analytics cookies to help us track dashboard engagement and report errors. Essential cookies remain active.
+          {/* Section 2: Password Management Card */}
+          <div className="card shadow-sm border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 rounded-2xl p-6">
+            <div className="flex items-center justify-between mb-6 pb-3 border-b border-slate-100 dark:border-slate-800/60">
+              <div className="flex items-center gap-2">
+                <LuKey className="text-primary text-lg" />
+                <h5 className="text-sm font-bold text-slate-800 dark:text-slate-100">Security Credentials</h5>
+              </div>
+              <button
+                type="button"
+                onClick={() => setChangePasswordMode(!changePasswordMode)}
+                className="text-xs font-semibold text-primary hover:text-primary-dark cursor-pointer transition-colors"
+              >
+                {changePasswordMode ? "Cancel Change" : "Update Password"}
+              </button>
+            </div>
+
+            {changePasswordMode ? (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-fade-in">
+                <Input
+                  type="password"
+                  value={currentPassword}
+                  onChange={({ target }) => setCurrentPassword(target.value)}
+                  label="Current Password"
+                  placeholder="Enter current password"
+                />
+                <Input
+                  type="password"
+                  value={newPassword}
+                  onChange={({ target }) => setNewPassword(target.value)}
+                  label="New Password"
+                  placeholder="Min 8 characters"
+                />
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={({ target }) => setConfirmPassword(target.value)}
+                  label="Confirm New Password"
+                  placeholder="Confirm new password"
+                />
+              </div>
+            ) : (
+              <p className="text-xs text-slate-400 dark:text-slate-500 font-medium">
+                Password was last updated when account was registered. Change it to secure your login.
               </p>
-              
-              <div className="flex items-center justify-between pt-2 border-t border-gray-100 dark:border-slate-800">
-                <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">
-                  Enable Google Analytics
+            )}
+          </div>
+
+          {/* Section 3: Privacy & Security (GDPR Compliance) */}
+          <div className="card shadow-sm border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 rounded-2xl p-6">
+            <div className="flex items-center gap-2 mb-6 pb-3 border-b border-slate-100 dark:border-slate-800/60">
+              <LuShieldAlert className="text-primary text-lg" />
+              <h5 className="text-sm font-bold text-slate-800 dark:text-slate-100">Compliance & Account Data</h5>
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                <h6 className="text-xs font-bold text-slate-700 dark:text-slate-300">Data Portability & Export</h6>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                  Request a download of all your transaction entries, logs, and account settings.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleExportData}
+                className="flex items-center gap-2 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold px-4 py-2 rounded-xl transition-colors cursor-pointer shrink-0"
+              >
+                <LuDownload size={14} /> Export All JSON
+              </button>
+            </div>
+
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/60">
+              <div>
+                <h6 className="text-xs font-bold text-red-600">Delete Account & Profile</h6>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                  Permanently delete your profile, and wipe all financial data from the records.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleDeleteAccount}
+                className="flex items-center gap-2 bg-red-50 dark:bg-red-950/20 text-red-600 hover:bg-red-100/60 dark:hover:bg-red-950/40 text-xs font-semibold px-4 py-2 rounded-xl transition-colors cursor-pointer shrink-0"
+              >
+                <LuTrash2 size={14} /> Erase My Profile
+              </button>
+            </div>
+          </div>
+
+          {/* Section 4: System Preferences */}
+          <div className="card shadow-sm border border-slate-200/60 dark:border-slate-800/80 bg-white dark:bg-slate-900 rounded-2xl p-6">
+            <div className="flex items-center gap-2 mb-6 pb-3 border-b border-slate-100 dark:border-slate-800/60">
+              <LuBinary className="text-primary text-lg" />
+              <h5 className="text-sm font-bold text-slate-800 dark:text-slate-100">System Preferences</h5>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                id="allow-cookies"
+                checked={allowCookies}
+                onChange={(e) => setAllowCookies(e.target.checked)}
+                className="mt-1 w-4 h-4 rounded text-primary border-slate-300 focus:ring-primary accent-primary cursor-pointer"
+              />
+              <label htmlFor="allow-cookies" className="cursor-pointer">
+                <span className="block text-xs font-bold text-slate-700 dark:text-slate-300">Allow Analytics Cookies & Logs</span>
+                <span className="block text-[11px] text-slate-400 dark:text-slate-500 mt-0.5">
+                  Enable Google Analytics tracking codes and locally persistent cache structures to save preference configurations.
                 </span>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={allowCookies}
-                    onChange={handleCookieToggle}
-                    className="sr-only peer"
-                  />
-                  <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-slate-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-slate-600 peer-checked:bg-primary"></div>
-                </label>
-              </div>
-            </div>
-
-            {/* GDPR Controls */}
-            <div className="bg-white dark:bg-slate-900 border border-gray-200/50 dark:border-slate-800/80 p-6 rounded-2xl shadow-sm space-y-4">
-              <h3 className="flex items-center gap-2 font-bold text-gray-900 dark:text-gray-100 text-sm">
-                <LuDatabase className="text-primary text-base" /> Data Rights & Erasure
-              </h3>
-              <p className="text-[11px] text-gray-600 dark:text-gray-400 leading-relaxed">
-                Under GDPR/CCPA, you can request a file containing all your financial entries or permanently erase your profile logs.
-              </p>
-
-              <div className="flex flex-col gap-2 pt-2 border-t border-gray-100 dark:border-slate-800">
-                <button
-                  type="button"
-                  onClick={handleExportData}
-                  className="w-full text-center px-4 py-2 border border-purple-100 dark:border-purple-900/30 text-purple-600 dark:text-purple-400 text-xs font-bold rounded-lg hover:bg-purple-50 dark:hover:bg-purple-950/20 cursor-pointer transition-colors"
-                >
-                  Export Data Packages (JSON)
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeleteAccount}
-                  className="w-full text-center px-4 py-2 border border-red-100 dark:border-red-900/30 text-red-600 dark:text-red-400 text-xs font-bold rounded-lg hover:bg-red-50 dark:hover:bg-red-950/20 cursor-pointer transition-colors"
-                >
-                  Delete Account Permanently
-                </button>
-              </div>
+              </label>
             </div>
           </div>
-        </div>
+
+          {/* Save Button (Fixed to bottom on Mobile, inline on Desktop) */}
+          <div className="fixed bottom-16 left-0 right-0 p-4 bg-white/95 dark:bg-slate-900/95 border-t border-slate-200/60 dark:border-slate-800/80 lg:static lg:bg-transparent lg:p-0 lg:border-t-0 z-40 shadow-lg lg:shadow-none">
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full lg:w-auto flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-purple-600 hover:from-primary-dark hover:to-purple-700 text-white font-semibold text-xs py-3 px-6 rounded-xl cursor-pointer shadow-md shadow-primary/20 select-none"
+            >
+              <LuSave size={16} />
+              {loading ? "Saving changes..." : "Save Config Profile"}
+            </button>
+          </div>
+
+        </form>
       </div>
     </DashboardLayout>
   );

@@ -1,11 +1,25 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from "recharts";
 import CustomTooltip from "./CustomTooltip";
 import CustomLegend from "./CustomLegend";
 
 const CustomPieChart = ({ data, label, totalAmount, colors, showTextAnchor }) => {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 640);
+    };
+    handleResize();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  const outerRadius = isMobile ? 80 : 130;
+  const innerRadius = isMobile ? 60 : 100;
+
   return (
-    <ResponsiveContainer width="100%" height={380}>
+    <ResponsiveContainer width="100%" height={isMobile ? 320 : 380}>
       <PieChart>
         <Pie
           data={data}
@@ -13,8 +27,8 @@ const CustomPieChart = ({ data, label, totalAmount, colors, showTextAnchor }) =>
           nameKey="name"
           cx="50%"
           cy="50%"
-          outerRadius={130}
-          innerRadius={100}
+          outerRadius={outerRadius}
+          innerRadius={innerRadius}
           labelLine={false}
           animationDuration={800}
           animationEasing="ease-in-out"
