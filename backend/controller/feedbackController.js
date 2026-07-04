@@ -1,13 +1,18 @@
 const Feedback = require('../models/Feedback');
+const crypto = require('crypto');
 const logger = require('../utils/logger');
 const {
-    sendEmail,
-    sendBugReportConfirmationEmail,
-    sendFeedbackConfirmationEmail,
-    sendFeatureRequestConfirmationEmail,
-    sendSupportConfirmationEmail,
-    sendAccountIssueConfirmationEmail
+    sendContactMessageNotification,
+    sendFeedbackNotification,
+    sendBugReportNotification,
+    sendFeatureRequestNotification,
+    sendAccountIssueNotification,
 } = require('../utils/emailService');
+
+// Helper to generate ticket ID
+const generateTicketId = (feedbackId) => {
+    return `EXP-${feedbackId.toString().substring(18).toUpperCase()}`;
+};
 
 exports.createFeedback = async (req, res) => {
     try {
@@ -52,42 +57,37 @@ exports.createFeedback = async (req, res) => {
 
         logger.info(`Feedback submitted by ${email}: [${type}] ${subject}`);
 
-        // Notify support/admin (simulated email)
-        await sendEmail({
-            to: 'expensifya@gmail.com',
-            subject: `[New ${type.toUpperCase()}] ${subject}`,
-            text: `Feedback ID: ${feedback._id}\nFrom: ${fullname} (${email})\nMessage:\n${message}`,
-            html: `<h3>New Support Submission</h3>
-                   <p><strong>Type:</strong> ${type.toUpperCase()}</p>
-                   <p><strong>From:</strong> ${fullname} (${email})</p>
-                   <p><strong>Subject:</strong> ${subject}</p>
-                   <p><strong>Message:</strong></p>
-                   <p>${message}</p>`
-        });
+        const ticketId = generateTicketId(feedback._id);
+        const submittedAt = new Date(feedback.createdAt).toLocaleString();
 
-        // Send contextual SaaS confirmation email to user
         const emailParams = {
             to: email,
             userName: fullname,
-            ticketId: `EXP-${feedback._id.toString().substring(18).toUpperCase()}`,
-            submittedAt: new Date(feedback.createdAt).toLocaleString(),
-            message: message
+            email: email.toLowerCase(),
+            ticketId,
+            subject,
+            message,
+            submittedAt,
         };
 
+        // Send user confirmation + admin notification based on type
         try {
             if (type === 'bug') {
-                await sendBugReportConfirmationEmail(emailParams);
+                await sendBugReportNotification(emailParams);
             } else if (type === 'feedback') {
-                await sendFeedbackConfirmationEmail(emailParams);
+                await sendFeedbackNotification(emailParams);
             } else if (type === 'feature') {
-                await sendFeatureRequestConfirmationEmail(emailParams);
+                await sendFeatureRequestNotification(emailParams);
             } else if (type === 'account') {
-                await sendAccountIssueConfirmationEmail(emailParams);
+                await sendAccountIssueNotification(emailParams);
             } else {
-                await sendSupportConfirmationEmail(emailParams);
+                // 'contact' type
+                await sendContactMessageNotification(emailParams);
             }
+            logger.info(`Notification emails sent for [${type}] ticket ${ticketId}`);
         } catch (mailError) {
-            logger.error('Error sending support auto-response email:', mailError);
+            // Log but don't fail the feedback submission
+            logger.error(`Failed to send notification emails for ticket ${ticketId}: ${mailError.message}`);
         }
 
         res.status(201).json({

@@ -8,7 +8,7 @@ const helmet = require('helmet');
 
 const connectDB = require('./config/db');
 const logger = require('./utils/logger');
-const { verifySmtpConnection, isSmtpConfigured } = require('./utils/emailService');
+const { verifyEmailConnection, sendEmail } = require('./utils/emailService');
 
 // Import Custom Middlewares
 const cookieParser = require('./middleware/cookieParser');
@@ -91,11 +91,11 @@ app.get('/api/v1/health', async (req, res) => {
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         database: dbStatus,
+        email: process.env.RESEND_API_KEY ? 'configured' : 'not configured',
     });
 });
 
-// ─── Diagnostic SMTP Test — ADMIN ONLY (dev/internal use) ────────────────────
-// Protected: only accessible when a valid ADMIN_SECRET header is sent
+// ─── Diagnostic Email Test — ADMIN ONLY ──────────────────────────────────────
 app.get('/api/v1/health/test-email', async (req, res) => {
     const adminSecret = process.env.ADMIN_SECRET;
     const providedSecret = req.headers['x-admin-secret'];
@@ -104,13 +104,12 @@ app.get('/api/v1/health/test-email', async (req, res) => {
         return res.status(403).json({ success: false, message: 'Forbidden' });
     }
 
-    const { sendEmail } = require('./utils/emailService');
     try {
         const result = await sendEmail({
-            to: process.env.SMTP_USER || 'expensifya@gmail.com',
-            subject: 'Expensify - SMTP Test Email',
-            text: 'This is a test email to verify that SMTP is configured correctly.',
-            html: '<p>This is a test email to verify that SMTP is configured correctly.</p>',
+            to: process.env.ADMIN_EMAIL || 'expensifya@gmail.com',
+            subject: 'Expensify — Email Delivery Test',
+            text: 'This is a test email to verify Resend API is configured correctly.',
+            html: '<p>This is a test email to verify <strong>Resend API</strong> is configured correctly.</p>',
         });
         res.status(200).json({ success: true, message: 'Test email sent successfully.', result });
     } catch (error) {
@@ -137,22 +136,40 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 const startServer = async () => {
     try {
-        // Step 1: Connect to MongoDB (exits on failure)
+        // Step 0: Verify required environment variables
+        const requiredVars = ['RESEND_API_KEY', 'JWT_SECRET', 'FRONTEND_URL', 'BACKEND_URL'];
+        const missingVars = requiredVars.filter(v => !process.env[v]);
+        const dbUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+        
+        if (!dbUri) {
+            missingVars.push('MONGODB_URI/MONGO_URI');
+        }
+
+        if (missingVars.length > 0) {
+            const errorMsg = `Missing required environment variables: ${missingVars.join(', ')}`;
+            if (isProduction) {
+                logger.error(`FATAL: ${errorMsg}`);
+                process.exit(1);
+            } else {
+                logger.warn(`WARNING: ${errorMsg}`);
+            }
+        }
+
+        // Step 1: Connect to MongoDB (exits on failure via connectDB)
         await connectDB();
 
-        // Step 2: Verify SMTP connectivity
-        if (isSmtpConfigured() || process.env.RESEND_API_KEY) {
-            const smtpOk = await verifySmtpConnection();
+        // Step 2: Verify Resend API connectivity
+        if (process.env.RESEND_API_KEY) {
+            const emailOk = await verifyEmailConnection();
 
-            if (isProduction && !smtpOk && !process.env.RESEND_API_KEY) {
-                // In production, if SMTP fails and no Resend fallback, refuse to start
-                logger.error('FATAL: SMTP connection failed in production and no Resend API key configured. Server cannot start without working email delivery.');
+            if (isProduction && !emailOk) {
+                logger.error('FATAL: Resend API connection failed in production. Server cannot start without working email delivery.');
                 process.exit(1);
-            } else if (!smtpOk) {
-                logger.warn('WARNING: SMTP connection verification failed. Email delivery may not work. Check SMTP configuration.');
+            } else if (!emailOk) {
+                logger.warn('WARNING: Resend API verification failed. Email delivery may not work.');
             }
         } else {
-            const msg = 'No email provider configured (SMTP or Resend). Email delivery will fail.';
+            const msg = 'RESEND_API_KEY not configured. Email delivery will fail.';
             if (isProduction) {
                 logger.error(`FATAL: ${msg}`);
                 process.exit(1);

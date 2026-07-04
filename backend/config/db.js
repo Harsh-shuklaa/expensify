@@ -17,7 +17,11 @@ mongoose.connection.on('disconnected', () => {
 
 const connectDB = async () => {
     try {
-        await mongoose.connect(process.env.MONGO_URI, {});
+        const dbUri = process.env.MONGODB_URI || process.env.MONGO_URI;
+        if (!dbUri) {
+            throw new Error('Database URI (MONGODB_URI or MONGO_URI) is not configured');
+        }
+        await mongoose.connect(dbUri, {});
         logger.info('MongoDB initial connection established successfully');
     } catch (error) {
         logger.error(`MongoDB connection failed: ${error.message}`);

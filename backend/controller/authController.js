@@ -5,7 +5,7 @@ const Income = require('../models/Income');
 const jwt = require('jsonwebtoken');
 const bcryptjs = require('bcryptjs');
 const logger = require('../utils/logger');
-const { sendEmail } = require('../utils/emailService');
+const { sendVerificationOTP, sendPasswordResetOTP } = require('../utils/emailService');
 
 // Token durations
 const ACCESS_TOKEN_EXPIRY = '15m'; // Short-lived access token
@@ -14,6 +14,7 @@ const REFRESH_TOKEN_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
 
 // OTP Constants
 const OTP_EXPIRY_MINUTES = 10;
+const RESET_OTP_EXPIRY_MINUTES = 15;
 const MAX_OTP_ATTEMPTS = 5;
 
 // Helper to generate JWT Access Token
@@ -48,20 +49,8 @@ const isValidPassword = (password) => {
     return passwordRegex.test(password);
 };
 
-// Helper to generate OTP verification email HTML
-const getOtpEmailHtml = (verificationCode, heading) => {
-    return `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-                <h2 style="color: #7c3aed; text-align: center;">${heading}</h2>
-                <p>Please verify your email using the verification code below:</p>
-                <div style="background-color: #f3f4f6; padding: 15px; text-align: center; border-radius: 8px; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #111827; margin: 20px 0;">
-                    ${verificationCode}
-                </div>
-                <p style="color: #ef4444; font-weight: 500;">Note: This verification code is valid for ${OTP_EXPIRY_MINUTES} minutes only.</p>
-                <p style="font-size: 12px; color: #6b7280; margin-top: 30px; border-top: 1px solid #eee; padding-top: 10px;">
-                    If you did not request this email, please ignore it.
-                </p>
-               </div>`;
-};
+// Helper to generate ticket ID
+const generateTicketId = () => `EXP-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
 
 // Register User
 exports.registerUser = async (req, res) => {
@@ -128,6 +117,8 @@ exports.registerUser = async (req, res) => {
         // Hash the OTP before storing
         const hashedOtp = await bcryptjs.hash(verificationCode, 10);
 
+        logger.info(`OTP generated for ${normalizedEmail} (expires: ${verificationCodeExpires.toISOString()})`);
+
         // Step 1: Create User (Unverified)
         let user;
         try {
@@ -149,16 +140,16 @@ exports.registerUser = async (req, res) => {
             });
         }
 
-        // Step 2: Send verification email — if this fails, DELETE the user (rollback)
+        // Step 2: Send verification email via Resend — if this fails, DELETE the user (rollback)
         try {
-            await sendEmail({
+            await sendVerificationOTP({
                 to: user.email,
-                subject: 'Verify Your Expensify Account',
-                text: `Welcome to Expensify! Your email verification code is: ${verificationCode}. It is valid for ${OTP_EXPIRY_MINUTES} minutes.`,
-                html: getOtpEmailHtml(verificationCode, 'Welcome to Expensify!'),
+                userName: user.fullname,
+                otp: verificationCode,
+                expiryMinutes: OTP_EXPIRY_MINUTES,
             });
 
-            logger.info(`User registered and verification email sent: ${user.email}`);
+            logger.info(`Verification email sent successfully to ${user.email}`);
 
             res.status(201).json({
                 success: true,
@@ -231,6 +222,7 @@ exports.verifyEmail = async (req, res) => {
 
         // Check OTP expiry
         if (!user.verificationCodeExpires || Date.now() > user.verificationCodeExpires) {
+            logger.info(`Expired OTP used for ${user.email}`);
             return res.status(400).json({
                 success: false,
                 message: 'Verification code has expired. Please request a new one.',
@@ -246,6 +238,8 @@ exports.verifyEmail = async (req, res) => {
             await user.save();
 
             const remaining = MAX_OTP_ATTEMPTS - user.otpAttempts;
+            logger.info(`Invalid OTP attempt for ${user.email} (${user.otpAttempts}/${MAX_OTP_ATTEMPTS})`);
+
             return res.status(400).json({
                 success: false,
                 message: `Invalid verification code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`,
@@ -259,7 +253,7 @@ exports.verifyEmail = async (req, res) => {
         user.otpAttempts = 0;
         await user.save();
 
-        logger.info(`User email verified: ${user.email}`);
+        logger.info(`Email verified successfully for: ${user.email}`);
 
         // Automatically log them in by generating tokens
         const accessToken = generateAccessToken(user._id);
@@ -425,17 +419,20 @@ exports.forgotPassword = async (req, res) => {
         const resetCode = crypto.randomInt(100000, 1000000).toString();
         const hashedResetCode = await bcryptjs.hash(resetCode, 10);
         user.resetCode = hashedResetCode;
-        user.resetCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins expiry
+        user.resetCodeExpires = new Date(Date.now() + RESET_OTP_EXPIRY_MINUTES * 60 * 1000);
         await user.save();
 
+        logger.info(`Password reset OTP generated for ${user.email}`);
+
         try {
-            await sendEmail({
+            await sendPasswordResetOTP({
                 to: user.email,
-                subject: 'Reset Your Expensify Password',
-                text: `You requested a password reset. Your 6-digit code is: ${resetCode}. It is valid for 15 minutes.`,
-                html: `<p>Your password reset code is: <strong>${resetCode}</strong></p>
-                       <p>This code will expire in 15 minutes.</p>`,
+                userName: user.fullname,
+                otp: resetCode,
+                expiryMinutes: RESET_OTP_EXPIRY_MINUTES,
             });
+
+            logger.info(`Password reset email sent to ${user.email}`);
         } catch (emailError) {
             // Clear the reset code since email wasn't sent
             user.resetCode = null;
@@ -447,8 +444,6 @@ exports.forgotPassword = async (req, res) => {
                 message: 'Unable to send password reset email. Please try again later.',
             });
         }
-
-        logger.info(`Password reset requested for: ${user.email}`);
 
         res.status(200).json({
             success: true,
@@ -690,7 +685,7 @@ exports.exportUserData = async (req, res) => {
     }
 };
 
-// GDPR Compliance: Delete Account Permenantly
+// GDPR Compliance: Delete Account Permanently
 exports.deleteAccount = async (req, res) => {
     try {
         const userId = req.user._id;
@@ -748,7 +743,7 @@ exports.resendOTP = async (req, res) => {
             });
         }
 
-        // Generate cryptographically secure 6-digit OTP
+        // Generate new OTP
         const verificationCode = crypto.randomInt(100000, 1000000).toString();
         const verificationCodeExpires = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
@@ -760,13 +755,15 @@ exports.resendOTP = async (req, res) => {
         user.otpAttempts = 0; // Reset attempt counter on resend
         await user.save();
 
-        // Send Email — throw on failure
+        logger.info(`Resend OTP generated for ${user.email} (expires: ${verificationCodeExpires.toISOString()})`);
+
+        // Send Email via Resend
         try {
-            await sendEmail({
+            await sendVerificationOTP({
                 to: user.email,
-                subject: 'Verify Your Expensify Account',
-                text: `Your new Expensify verification code is: ${verificationCode}. It is valid for ${OTP_EXPIRY_MINUTES} minutes.`,
-                html: getOtpEmailHtml(verificationCode, 'Verify Your Expensify Account'),
+                userName: user.fullname,
+                otp: verificationCode,
+                expiryMinutes: OTP_EXPIRY_MINUTES,
             });
 
             logger.info(`Verification OTP resent successfully to: ${user.email}`);
