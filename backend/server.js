@@ -8,6 +8,7 @@ const helmet = require('helmet');
 
 const connectDB = require('./config/db');
 const logger = require('./utils/logger');
+const { verifySmtpConnection, isSmtpConfigured } = require('./utils/emailService');
 
 // Import Custom Middlewares
 const cookieParser = require('./middleware/cookieParser');
@@ -111,11 +112,11 @@ app.get('/api/v1/health/test-email', async (req, res) => {
             text: 'This is a test email to verify that SMTP is configured correctly.',
             html: '<p>This is a test email to verify that SMTP is configured correctly.</p>',
         });
-        res.status(200).json({ success: true, message: 'Test email request processed.', result });
+        res.status(200).json({ success: true, message: 'Test email sent successfully.', result });
     } catch (error) {
         res.status(500).json({
             success: false,
-            message: 'Failed to execute test email call',
+            message: 'Email delivery failed',
             error: error.message,
         });
     }
@@ -130,10 +131,44 @@ app.use((err, req, res, next) => {
     });
 });
 
+// ─── Startup Sequence ────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 8000;
+const isProduction = process.env.NODE_ENV === 'production';
 
-connectDB();
+const startServer = async () => {
+    try {
+        // Step 1: Connect to MongoDB (exits on failure)
+        await connectDB();
 
-app.listen(PORT, () => {
-    logger.info(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-});
+        // Step 2: Verify SMTP connectivity
+        if (isSmtpConfigured() || process.env.RESEND_API_KEY) {
+            const smtpOk = await verifySmtpConnection();
+
+            if (isProduction && !smtpOk && !process.env.RESEND_API_KEY) {
+                // In production, if SMTP fails and no Resend fallback, refuse to start
+                logger.error('FATAL: SMTP connection failed in production and no Resend API key configured. Server cannot start without working email delivery.');
+                process.exit(1);
+            } else if (!smtpOk) {
+                logger.warn('WARNING: SMTP connection verification failed. Email delivery may not work. Check SMTP configuration.');
+            }
+        } else {
+            const msg = 'No email provider configured (SMTP or Resend). Email delivery will fail.';
+            if (isProduction) {
+                logger.error(`FATAL: ${msg}`);
+                process.exit(1);
+            } else {
+                logger.warn(msg);
+            }
+        }
+
+        // Step 3: Start HTTP server
+        app.listen(PORT, () => {
+            logger.info(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+        });
+    } catch (error) {
+        logger.error(`Server startup failed: ${error.message}`, error);
+        process.exit(1);
+    }
+};
+
+startServer();

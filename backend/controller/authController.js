@@ -12,6 +12,10 @@ const ACCESS_TOKEN_EXPIRY = '15m'; // Short-lived access token
 const REFRESH_TOKEN_EXPIRY = '7d';  // Long-lived refresh token
 const REFRESH_TOKEN_COOKIE_MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days in ms
 
+// OTP Constants
+const OTP_EXPIRY_MINUTES = 10;
+const MAX_OTP_ATTEMPTS = 5;
+
 // Helper to generate JWT Access Token
 const generateAccessToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -44,6 +48,21 @@ const isValidPassword = (password) => {
     return passwordRegex.test(password);
 };
 
+// Helper to generate OTP verification email HTML
+const getOtpEmailHtml = (verificationCode, heading) => {
+    return `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+                <h2 style="color: #7c3aed; text-align: center;">${heading}</h2>
+                <p>Please verify your email using the verification code below:</p>
+                <div style="background-color: #f3f4f6; padding: 15px; text-align: center; border-radius: 8px; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #111827; margin: 20px 0;">
+                    ${verificationCode}
+                </div>
+                <p style="color: #ef4444; font-weight: 500;">Note: This verification code is valid for ${OTP_EXPIRY_MINUTES} minutes only.</p>
+                <p style="font-size: 12px; color: #6b7280; margin-top: 30px; border-top: 1px solid #eee; padding-top: 10px;">
+                    If you did not request this email, please ignore it.
+                </p>
+               </div>`;
+};
+
 // Register User
 exports.registerUser = async (req, res) => {
     try {
@@ -73,70 +92,96 @@ exports.registerUser = async (req, res) => {
             });
         }
 
-        const existingUser = await User.findOne({ email: email.toLowerCase() });
+        const normalizedEmail = email.toLowerCase();
+
+        // Check for existing user
+        const existingUser = await User.findOne({ email: normalizedEmail });
         if (existingUser) {
-            return res.status(400).json({
-                success: false,
-                message: 'User already exists',
-            });
+            if (existingUser.isVerified) {
+                // Verified user exists — cannot re-register
+                return res.status(400).json({
+                    success: false,
+                    message: 'An account with this email already exists. Please login instead.',
+                });
+            }
+
+            // Unverified user exists — check if OTP has expired
+            if (existingUser.verificationCodeExpires && existingUser.verificationCodeExpires < new Date()) {
+                // OTP expired — delete the stale unverified user so they can re-register
+                await User.findByIdAndDelete(existingUser._id);
+                logger.info(`Cleaned up expired unverified user: ${existingUser.email}`);
+            } else {
+                // Unverified user with active OTP — prompt to verify or resend
+                return res.status(409).json({
+                    success: false,
+                    message: 'A verification email was already sent to this address. Please check your inbox or use "Resend OTP" on the verification page.',
+                    canResendOtp: true,
+                    email: normalizedEmail,
+                });
+            }
         }
 
         // Generate cryptographically secure 6-digit OTP
         const verificationCode = crypto.randomInt(100000, 1000000).toString();
-        const verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+        const verificationCodeExpires = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
+        // Hash the OTP before storing
+        const hashedOtp = await bcryptjs.hash(verificationCode, 10);
+
+        // Step 1: Create User (Unverified)
         let user;
         try {
-            // Create User (Unverified initially)
             user = await User.create({
                 fullname,
-                email: email.toLowerCase(),
+                email: normalizedEmail,
                 password,
                 profileImageUrl,
                 isVerified: false,
-                verificationCode,
+                verificationCode: hashedOtp,
                 verificationCodeExpires,
+                otpAttempts: 0,
             });
+        } catch (dbError) {
+            logger.error(`Failed to create user record for ${normalizedEmail}: ${dbError.message}`);
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to create account. Please try again.',
+            });
+        }
 
-            // Send Email (Logged to sent_emails.log in dev)
+        // Step 2: Send verification email — if this fails, DELETE the user (rollback)
+        try {
             await sendEmail({
                 to: user.email,
                 subject: 'Verify Your Expensify Account',
-                text: `Welcome to Expensify! Your email verification code is: ${verificationCode}. It is valid for 10 minutes.`,
-                html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-                        <h2 style="color: #7c3aed; text-align: center;">Welcome to Expensify!</h2>
-                        <p>Thank you for signing up. Please verify your email using the verification code below:</p>
-                        <div style="background-color: #f3f4f6; padding: 15px; text-align: center; border-radius: 8px; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #111827; margin: 20px 0;">
-                            ${verificationCode}
-                        </div>
-                        <p style="color: #ef4444; font-weight: 500;">Note: This verification code is valid for 10 minutes only.</p>
-                        <p style="font-size: 12px; color: #6b7280; margin-top: 30px; border-top: 1px solid #eee; padding-top: 10px;">
-                            If you did not request this email, please ignore it.
-                        </p>
-                       </div>`,
+                text: `Welcome to Expensify! Your email verification code is: ${verificationCode}. It is valid for ${OTP_EXPIRY_MINUTES} minutes.`,
+                html: getOtpEmailHtml(verificationCode, 'Welcome to Expensify!'),
             });
 
-            logger.info(`User registered successfully: ${user.email}`);
+            logger.info(`User registered and verification email sent: ${user.email}`);
 
             res.status(201).json({
                 success: true,
-                message: 'Registration successful! Please verify your email.',
+                message: 'Registration successful! Please check your email for the verification code.',
                 email: user.email,
                 isVerified: false,
             });
-        } catch (innerError) {
-            if (user && user._id) {
-                await User.findByIdAndDelete(user._id);
-                logger.warn(`Registration rolled back: deleted user ${user.email} due to error: ${innerError.message}`);
-            }
-            throw innerError;
+        } catch (emailError) {
+            // CRITICAL: Email failed — rollback user creation
+            await User.findByIdAndDelete(user._id);
+            logger.error(`Registration rolled back for ${user.email}: email delivery failed — ${emailError.message}`);
+
+            return res.status(503).json({
+                success: false,
+                message: 'Unable to send verification email. Please try again later or contact support.',
+                detail: process.env.NODE_ENV !== 'production' ? emailError.message : undefined,
+            });
         }
     } catch (error) {
         logger.error('Error registering user:', error);
         res.status(500).json({
             success: false,
-            message: error.message || 'Error registering user',
-            error: error.message,
+            message: 'An unexpected error occurred during registration. Please try again.',
         });
     }
 };
@@ -153,31 +198,65 @@ exports.verifyEmail = async (req, res) => {
             });
         }
 
+        // Validate OTP format
+        if (!/^\d{6}$/.test(code)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Verification code must be exactly 6 digits',
+            });
+        }
+
         const user = await User.findOne({ email: email.toLowerCase() });
         if (!user) {
             return res.status(404).json({
                 success: false,
-                message: 'User not found',
+                message: 'No account found with this email. Please sign up first.',
             });
         }
 
         if (user.isVerified) {
             return res.status(400).json({
                 success: false,
-                message: 'Email is already verified',
+                message: 'Email is already verified. Please login.',
             });
         }
 
-        if (user.verificationCode !== code || Date.now() > user.verificationCodeExpires) {
+        // Check OTP attempt limit
+        if (user.otpAttempts >= MAX_OTP_ATTEMPTS) {
+            return res.status(429).json({
+                success: false,
+                message: 'Too many failed verification attempts. Please request a new OTP.',
+            });
+        }
+
+        // Check OTP expiry
+        if (!user.verificationCodeExpires || Date.now() > user.verificationCodeExpires) {
             return res.status(400).json({
                 success: false,
-                message: 'Invalid or expired verification code',
+                message: 'Verification code has expired. Please request a new one.',
+                isExpired: true,
             });
         }
 
+        // Compare hashed OTP
+        const isOtpValid = await bcryptjs.compare(code, user.verificationCode);
+        if (!isOtpValid) {
+            // Increment attempt counter
+            user.otpAttempts = (user.otpAttempts || 0) + 1;
+            await user.save();
+
+            const remaining = MAX_OTP_ATTEMPTS - user.otpAttempts;
+            return res.status(400).json({
+                success: false,
+                message: `Invalid verification code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining.`,
+            });
+        }
+
+        // OTP is valid — verify the user
         user.isVerified = true;
         user.verificationCode = null;
         user.verificationCodeExpires = null;
+        user.otpAttempts = 0;
         await user.save();
 
         logger.info(`User email verified: ${user.email}`);
@@ -203,8 +282,7 @@ exports.verifyEmail = async (req, res) => {
         logger.error('Error verifying email:', error);
         res.status(500).json({
             success: false,
-            message: 'Error verifying email',
-            error: error.message,
+            message: 'Error verifying email. Please try again.',
         });
     }
 };
@@ -265,6 +343,7 @@ exports.loginUser = async (req, res) => {
             return res.status(403).json({
                 success: false,
                 isVerified: false,
+                email: user.email,
                 message: 'Please verify your email first. Check your inbox for the verification code sent during signup.',
             });
         }
@@ -292,8 +371,7 @@ exports.loginUser = async (req, res) => {
         logger.error('Login error:', error);
         res.status(500).json({
             success: false,
-            message: 'Error logging in user',
-            error: error.message,
+            message: 'Error logging in. Please try again.',
         });
     }
 };
@@ -345,17 +423,30 @@ exports.forgotPassword = async (req, res) => {
         }
 
         const resetCode = crypto.randomInt(100000, 1000000).toString();
-        user.resetCode = resetCode;
+        const hashedResetCode = await bcryptjs.hash(resetCode, 10);
+        user.resetCode = hashedResetCode;
         user.resetCodeExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 mins expiry
         await user.save();
 
-        await sendEmail({
-            to: user.email,
-            subject: 'Reset Your Expensify Password',
-            text: `You requested a password reset. Your 6-digit code is: ${resetCode}. It is valid for 15 minutes.`,
-            html: `<p>Your password reset code is: <strong>${resetCode}</strong></p>
-                   <p>This code will expire in 15 minutes.</p>`,
-        });
+        try {
+            await sendEmail({
+                to: user.email,
+                subject: 'Reset Your Expensify Password',
+                text: `You requested a password reset. Your 6-digit code is: ${resetCode}. It is valid for 15 minutes.`,
+                html: `<p>Your password reset code is: <strong>${resetCode}</strong></p>
+                       <p>This code will expire in 15 minutes.</p>`,
+            });
+        } catch (emailError) {
+            // Clear the reset code since email wasn't sent
+            user.resetCode = null;
+            user.resetCodeExpires = null;
+            await user.save();
+            logger.error(`Failed to send password reset email to ${user.email}: ${emailError.message}`);
+            return res.status(503).json({
+                success: false,
+                message: 'Unable to send password reset email. Please try again later.',
+            });
+        }
 
         logger.info(`Password reset requested for: ${user.email}`);
 
@@ -392,7 +483,13 @@ exports.resetPassword = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        if (user.resetCode !== code || Date.now() > user.resetCodeExpires) {
+        if (!user.resetCode || !user.resetCodeExpires || Date.now() > user.resetCodeExpires) {
+            return res.status(400).json({ success: false, message: 'Invalid or expired reset code' });
+        }
+
+        // Compare hashed reset code
+        const isCodeValid = await bcryptjs.compare(code, user.resetCode);
+        if (!isCodeValid) {
             return res.status(400).json({ success: false, message: 'Invalid or expired reset code' });
         }
 
@@ -640,52 +737,56 @@ exports.resendOTP = async (req, res) => {
         if (!user) {
             return res.status(404).json({
                 success: false,
-                message: 'User not found',
+                message: 'No account found with this email. Please sign up first.',
             });
         }
 
         if (user.isVerified) {
             return res.status(400).json({
                 success: false,
-                message: 'Email is already verified',
+                message: 'Email is already verified. Please login.',
             });
         }
 
         // Generate cryptographically secure 6-digit OTP
         const verificationCode = crypto.randomInt(100000, 1000000).toString();
-        const verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+        const verificationCodeExpires = new Date(Date.now() + OTP_EXPIRY_MINUTES * 60 * 1000);
 
-        user.verificationCode = verificationCode;
+        // Hash OTP before storing
+        const hashedOtp = await bcryptjs.hash(verificationCode, 10);
+
+        user.verificationCode = hashedOtp;
         user.verificationCodeExpires = verificationCodeExpires;
+        user.otpAttempts = 0; // Reset attempt counter on resend
         await user.save();
 
-        // Send Email
-        await sendEmail({
-            to: user.email,
-            subject: 'Verify Your Expensify Account',
-            text: `Welcome back to Expensify! Your email verification code is: ${verificationCode}. It is valid for 10 minutes.`,
-            html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-                    <h2 style="color: #7c3aed; text-align: center;">Verify Your Expensify Account</h2>
-                    <p>Here is your new verification code to complete registration:</p>
-                    <div style="background-color: #f3f4f6; padding: 15px; text-align: center; border-radius: 8px; font-size: 24px; font-weight: bold; letter-spacing: 5px; color: #111827; margin: 20px 0;">
-                        ${verificationCode}
-                    </div>
-                    <p style="color: #ef4444; font-weight: 500;">Note: This verification code is valid for 10 minutes only.</p>
-                   </div>`,
-        });
+        // Send Email — throw on failure
+        try {
+            await sendEmail({
+                to: user.email,
+                subject: 'Verify Your Expensify Account',
+                text: `Your new Expensify verification code is: ${verificationCode}. It is valid for ${OTP_EXPIRY_MINUTES} minutes.`,
+                html: getOtpEmailHtml(verificationCode, 'Verify Your Expensify Account'),
+            });
 
-        logger.info(`Verification OTP resent successfully to: ${user.email}`);
+            logger.info(`Verification OTP resent successfully to: ${user.email}`);
 
-        res.status(200).json({
-            success: true,
-            message: 'A new verification OTP has been sent to your email.',
-        });
+            res.status(200).json({
+                success: true,
+                message: 'A new verification code has been sent to your email.',
+            });
+        } catch (emailError) {
+            logger.error(`Failed to resend OTP to ${user.email}: ${emailError.message}`);
+            return res.status(503).json({
+                success: false,
+                message: 'Unable to send verification email. Please try again later.',
+            });
+        }
     } catch (error) {
         logger.error('Error resending OTP:', error);
         res.status(500).json({
             success: false,
-            message: 'Error resending OTP',
-            error: error.message,
+            message: 'An unexpected error occurred. Please try again.',
         });
     }
 };

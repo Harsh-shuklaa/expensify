@@ -10,6 +10,9 @@ if (!fs.existsSync(logsDir)) {
   fs.mkdirSync(logsDir, { recursive: true });
 }
 
+// Nodemailer is a required dependency — fail loudly if missing
+const nodemailer = require('nodemailer');
+
 // SMTP credentials check
 const isSmtpConfigured = () => {
   const host = (process.env.SMTP_HOST || '').replace(/^["']|["']$/g, '');
@@ -19,17 +22,55 @@ const isSmtpConfigured = () => {
   return !!(host && port && user && pass);
 };
 
+/**
+ * Create a reusable SMTP transporter with IPv4 forced
+ */
+const createSmtpTransporter = () => {
+  const host = (process.env.SMTP_HOST || '').replace(/^["']|["']$/g, '');
+  const port = parseInt((process.env.SMTP_PORT || '587').replace(/^["']|["']$/g, ''));
+  const secure = (process.env.SMTP_SECURE || 'false').replace(/^["']|["']$/g, '') === 'true';
+  const user = (process.env.SMTP_USER || '').replace(/^["']|["']$/g, '');
+  const pass = (process.env.SMTP_PASS || '').replace(/^["']|["']$/g, '');
 
-// Try loading nodemailer dynamically
-let nodemailer = null;
-try {
-  nodemailer = require('nodemailer');
-} catch (e) {
-  logger.info('Nodemailer is not installed locally. Email service will run in simulated mode.');
-}
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    family: 4, // Force IPv4 to prevent ENETUNREACH on IPv6-blocked hosts (e.g. Render)
+    auth: {
+      user,
+      pass,
+    },
+    connectionTimeout: 10000, // 10 second connection timeout
+    socketTimeout: 15000,     // 15 second socket timeout
+  });
+};
 
 /**
- * Send email via Resend API (HTTP POST) to bypass Render SMTP port blocking
+ * Verify SMTP connection is reachable.
+ * Call at server startup to fail fast if SMTP is misconfigured.
+ * Returns true if SMTP is working, false otherwise.
+ */
+const verifySmtpConnection = async () => {
+  if (!isSmtpConfigured()) {
+    logger.error('SMTP is not configured. Missing one or more of: SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS');
+    return false;
+  }
+
+  try {
+    const transporter = createSmtpTransporter();
+    await transporter.verify();
+    logger.info('SMTP connection verified successfully');
+    return true;
+  } catch (error) {
+    logger.error(`SMTP connection verification failed: ${error.message}`, error);
+    return false;
+  }
+};
+
+/**
+ * Send email via Resend API (HTTP POST) to bypass SMTP port blocking on platforms like Render
+ * Throws on failure — no silent fallback.
  */
 const sendViaResend = async ({ to, subject, html, text }) => {
   const https = require('https');
@@ -50,6 +91,7 @@ const sendViaResend = async ({ to, subject, html, text }) => {
       port: 443,
       path: '/emails',
       method: 'POST',
+      family: 4, // Force IPv4
       headers: {
         'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
@@ -73,7 +115,7 @@ const sendViaResend = async ({ to, subject, html, text }) => {
     });
 
     req.on('error', (e) => {
-      reject(e);
+      reject(new Error(`Resend API request failed: ${e.message}`));
     });
 
     req.write(postData);
@@ -82,7 +124,11 @@ const sendViaResend = async ({ to, subject, html, text }) => {
 };
 
 /**
- * Send real email via SMTP if configured, or fall back to local log simulation
+ * Send real email via configured provider.
+ * Priority: Resend HTTP API → SMTP
+ * 
+ * IMPORTANT: This function THROWS on failure. No simulation, no fallback.
+ * Callers must handle the error appropriately (e.g. rollback user creation).
  */
 const sendEmail = async ({ to, subject, html, text }) => {
   // Log email preview in development mode for easy testing/OTP retrieval
@@ -90,38 +136,31 @@ const sendEmail = async ({ to, subject, html, text }) => {
     logger.info(`[Dev Mode Email Preview] To: ${to} | Subject: ${subject} | Content: ${text || 'N/A'}`);
   }
 
-  // 1. Try Resend HTTP API if configured (highly recommended for Render Free Tier)
+  const errors = [];
+
+  // 1. Try Resend HTTP API if configured (recommended for platforms that block SMTP)
   if (process.env.RESEND_API_KEY) {
     try {
       logger.info(`Attempting to send email via Resend HTTP API to ${to}...`);
       const result = await sendViaResend({ to, subject, html, text });
       logger.info(`Email sent successfully via Resend API to ${to}`, { messageId: result.messageId });
+
+      // Log successful delivery
+      logEmailToFile({ to, subject, text, mode: 'resend' });
+
       return result;
     } catch (error) {
-      logger.error(`Resend API sending failed to ${to}. Attempting SMTP/Simulation fallback...`, error);
-      global.lastSmtpError = `Resend failed: ${error.message}`;
+      logger.error(`Resend API sending failed to ${to}: ${error.message}`);
+      errors.push(`Resend: ${error.message}`);
     }
   }
 
   // 2. Try Standard SMTP if configured
-  if (nodemailer && isSmtpConfigured()) {
+  if (isSmtpConfigured()) {
     try {
-      const host = (process.env.SMTP_HOST || '').replace(/^["']|["']$/g, '');
-      const port = parseInt((process.env.SMTP_PORT || '587').replace(/^["']|["']$/g, ''));
-      const secure = (process.env.SMTP_SECURE || 'false').replace(/^["']|["']$/g, '') === 'true';
-      const user = (process.env.SMTP_USER || '').replace(/^["']|["']$/g, '');
-      const pass = (process.env.SMTP_PASS || '').replace(/^["']|["']$/g, '');
+      const transporter = createSmtpTransporter();
       const from = (process.env.SMTP_FROM || '').replace(/^["']|["']$/g, '');
-
-      const transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure,
-        auth: {
-          user,
-          pass,
-        },
-      });
+      const user = (process.env.SMTP_USER || '').replace(/^["']|["']$/g, '');
 
       const mailOptions = {
         from: from || `"Expensify Support" <${user}>`,
@@ -133,13 +172,30 @@ const sendEmail = async ({ to, subject, html, text }) => {
 
       const info = await transporter.sendMail(mailOptions);
       logger.info(`Email sent successfully via SMTP to ${to}`, { messageId: info.messageId });
+
+      // Log successful delivery
+      logEmailToFile({ to, subject, text, mode: 'smtp' });
+
       return { success: true, messageId: info.messageId, mode: 'smtp' };
     } catch (error) {
-      logger.error(`Failed to send email via SMTP to ${to}. Attempting fallback simulation...`, error);
-      global.lastSmtpError = error.message || error;
+      logger.error(`Failed to send email via SMTP to ${to}: ${error.message}`, error);
+      errors.push(`SMTP: ${error.message}`);
     }
+  } else if (!process.env.RESEND_API_KEY) {
+    errors.push('No email provider configured. Set SMTP_HOST/SMTP_PORT/SMTP_USER/SMTP_PASS or RESEND_API_KEY.');
   }
 
+  // NO FALLBACK — throw hard error with all failure details
+  const errorSummary = errors.join(' | ');
+  const finalError = new Error(`Email delivery failed to ${to}. Errors: ${errorSummary}`);
+  finalError.isEmailDeliveryError = true;
+  throw finalError;
+};
+
+/**
+ * Log successfully sent email to file for audit trail
+ */
+const logEmailToFile = ({ to, subject, text, mode }) => {
   try {
     const timestamp = new Date().toISOString();
     const border = '='.repeat(80);
@@ -148,25 +204,15 @@ ${border}
 Date: ${timestamp}
 To: ${to}
 Subject: ${subject}
+Mode: ${mode}
 ${border}
 Text Content:
 ${text || 'N/A'}
-
-HTML Content:
-${html}
 ${border}
 \n`;
-
-    try {
-      fs.appendFileSync(emailLogPath, emailRecord, 'utf8');
-    } catch (fileError) {
-      logger.error('Failed to log simulated email to file, falling back to console:', fileError.message);
-    }
-    logger.info(`[Simulation Mode] Email for ${to} | OTP/Content: ${text || 'N/A'}`);
-    return { success: true, messageId: `simulated-id-${Date.now()}`, mode: 'simulation', smtpError: global.lastSmtpError };
-  } catch (error) {
-    logger.error('Failed to process simulated email:', error);
-    return { success: true, messageId: `simulated-id-fallback-${Date.now()}`, mode: 'simulation_fallback', error: error.message };
+    fs.appendFileSync(emailLogPath, emailRecord, 'utf8');
+  } catch (fileError) {
+    logger.error('Failed to log email to audit file:', fileError.message);
   }
 };
 
@@ -536,6 +582,8 @@ const sendAccountIssueConfirmationEmail = async ({ to, userName, ticketId, submi
 
 module.exports = {
   sendEmail,
+  verifySmtpConnection,
+  isSmtpConfigured,
   sendBugReportConfirmationEmail,
   sendFeedbackConfirmationEmail,
   sendFeatureRequestConfirmationEmail,

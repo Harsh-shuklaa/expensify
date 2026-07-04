@@ -17,6 +17,7 @@ const SignUp = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
   const { updateUser } = useContext(UserContext);
   const navigate = useNavigate();
 
@@ -39,6 +40,7 @@ const SignUp = () => {
     }
 
     setError("");
+    setLoading(true);
 
     try {
       if (profilePic) {
@@ -57,18 +59,39 @@ const SignUp = () => {
         password,
         profileImageUrl,
       });
-      const { token, user } = response.data;
 
       if (response.data && response.data.success) {
         trackEvent("signup_initiated", "Authentication", email);
-        navigate("/verify-otp", { state: { email } });
+        navigate("/verify-otp", { state: { email: response.data.email || email } });
       }
     } catch (error) {
-      if (error.response && error.response.data.message) {
-        setError(error.response.data.message);
+      if (error.response) {
+        const { status, data } = error.response;
+
+        if (status === 409 && data.canResendOtp) {
+          // Unverified user exists with active OTP — redirect to verify page
+          setError(data.message);
+          setTimeout(() => {
+            navigate("/verify-otp", { state: { email: data.email || email } });
+          }, 2000);
+        } else if (status === 503) {
+          // Email delivery failed — user was rolled back
+          setError(data.message || "Unable to send verification email. Please try again later.");
+        } else if (status === 429) {
+          // Rate limited
+          setError(data.message || "Too many signup attempts. Please try again later.");
+        } else if (data.message) {
+          setError(data.message);
+        } else {
+          setError("Registration failed. Please try again.");
+        }
+      } else if (error.request) {
+        setError("Unable to reach the server. Please check your internet connection.");
       } else {
-        setError("Something went wrong. Please try again.");
+        setError("An unexpected error occurred. Please try again.");
       }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -107,8 +130,8 @@ const SignUp = () => {
             </div>
           </div>
           {error && <p className="text-red-500 text-xs pb-2.5">{error}</p>}
-          <button type="submit" className="btn-primary">
-            Create Account
+          <button type="submit" className="btn-primary" disabled={loading}>
+            {loading ? 'Creating Account...' : 'Create Account'}
           </button>
           <p className='text-[13px] text-slate-800 dark:text-slate-400 mt-3'>
             Already have an account?{" "}

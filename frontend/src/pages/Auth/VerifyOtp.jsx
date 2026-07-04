@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import AuthLayout from '../../components/layouts/AuthLayout.jsx';
 import Input from '../../components/Inputs/Input.jsx';
@@ -7,6 +7,8 @@ import { API_PATHS } from '../../utils/apiPaths.js';
 import { UserContext } from '../../context/UserContext.jsx';
 import toast from 'react-hot-toast';
 import { trackEvent } from '../../utils/analytics';
+
+const RESEND_COOLDOWN_SECONDS = 60;
 
 const VerifyOtp = () => {
     const location = useLocation();
@@ -18,6 +20,22 @@ const VerifyOtp = () => {
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
     const [resending, setResending] = useState(false);
+    const [resendCooldown, setResendCooldown] = useState(0);
+
+    // Resend cooldown timer
+    useEffect(() => {
+        if (resendCooldown <= 0) return;
+        const timer = setInterval(() => {
+            setResendCooldown((prev) => {
+                if (prev <= 1) {
+                    clearInterval(timer);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+        return () => clearInterval(timer);
+    }, [resendCooldown]);
 
     const handleVerify = async (e) => {
         e.preventDefault();
@@ -26,7 +44,7 @@ const VerifyOtp = () => {
             setError('Please enter your email address');
             return;
         }
-        if (code.length !== 6) {
+        if (!/^\d{6}$/.test(code)) {
             setError('Verification code must be exactly 6 digits');
             return;
         }
@@ -50,12 +68,26 @@ const VerifyOtp = () => {
                 navigate('/dashboard');
             }
         } catch (error) {
-            if (error.response && error.response.data.message) {
-                setError(error.response.data.message);
+            if (error.response) {
+                const { data } = error.response;
+
+                if (data.isExpired) {
+                    setError('Your verification code has expired. Please request a new one.');
+                    toast.error('Code expired');
+                } else if (data.message) {
+                    setError(data.message);
+                    toast.error(data.message);
+                } else {
+                    setError('Verification failed. Please check your code and try again.');
+                    toast.error('Verification failed');
+                }
+            } else if (error.request) {
+                setError('Unable to reach the server. Please check your internet connection.');
+                toast.error('Connection error');
             } else {
-                setError('Something went wrong. Please try again.');
+                setError('An unexpected error occurred. Please try again.');
+                toast.error('Verification failed');
             }
-            toast.error('Verification failed');
         } finally {
             setLoading(false);
         }
@@ -66,6 +98,8 @@ const VerifyOtp = () => {
             setError('Please enter your email address to resend OTP');
             return;
         }
+        if (resendCooldown > 0) return;
+
         setError('');
         setResending(true);
 
@@ -75,15 +109,33 @@ const VerifyOtp = () => {
             });
 
             if (response.data && response.data.success) {
-                toast.success(response.data.message || 'Verification OTP has been resent to your email.');
+                toast.success(response.data.message || 'A new verification code has been sent to your email.');
+                setResendCooldown(RESEND_COOLDOWN_SECONDS);
+                setCode(''); // Clear old code input
             }
         } catch (error) {
-            const errorMsg = error.response?.data?.message || 'Failed to resend OTP. Please try again.';
-            setError(errorMsg);
-            toast.error(errorMsg);
+            if (error.response) {
+                const { status, data } = error.response;
+                if (status === 429) {
+                    setError(data.message || 'Too many resend attempts. Please wait before trying again.');
+                } else if (status === 503) {
+                    setError(data.message || 'Unable to send verification email. Please try again later.');
+                } else {
+                    setError(data.message || 'Failed to resend OTP. Please try again.');
+                }
+            } else {
+                setError('Unable to reach the server. Please check your connection.');
+            }
+            toast.error('Failed to resend code');
         } finally {
             setResending(false);
         }
+    };
+
+    const resendButtonText = () => {
+        if (resending) return 'Sending...';
+        if (resendCooldown > 0) return `Resend in ${resendCooldown}s`;
+        return 'Resend Verification Code';
     };
 
     return (
@@ -110,7 +162,11 @@ const VerifyOtp = () => {
 
                     <Input
                         value={code}
-                        onChange={({ target }) => setCode(target.value)}
+                        onChange={({ target }) => {
+                            // Only allow digits, max 6 characters
+                            const val = target.value.replace(/\D/g, '').slice(0, 6);
+                            setCode(val);
+                        }}
                         label="6-Digit Verification Code"
                         placeholder="123456"
                         type="text"
@@ -119,11 +175,11 @@ const VerifyOtp = () => {
                     <div className="flex justify-end mt-1 mb-4">
                         <button
                             type="button"
-                            disabled={resending || loading}
+                            disabled={resending || loading || resendCooldown > 0}
                             onClick={handleResendOtp}
                             className="text-[12px] font-medium text-primary underline disabled:opacity-50"
                         >
-                            {resending ? 'Sending...' : 'Resend Verification Code'}
+                            {resendButtonText()}
                         </button>
                     </div>
 

@@ -35,6 +35,11 @@ const UserSchema = mongoose.Schema({
         type: Date,
         default: null,
     },
+    // OTP brute-force protection
+    otpAttempts: {
+        type: Number,
+        default: 0,
+    },
     // Password Reset fields
     resetCode: {
         type: String,
@@ -69,7 +74,15 @@ UserSchema.methods.comparePassword = async function (candidatePassword) {
     return await bcryptjs.compare(candidatePassword, this.password);
 };
 
+// TTL index: auto-delete unverified users whose OTP has expired
+// MongoDB's TTL monitor runs every ~60 seconds and will delete matching documents
+// Only applies to documents where isVerified is false (partial filter expression)
+UserSchema.index(
+    { verificationCodeExpires: 1 },
+    {
+        expireAfterSeconds: 0,
+        partialFilterExpression: { isVerified: false }
+    }
+);
+
 module.exports = mongoose.model('User', UserSchema);
-
-
-

@@ -40,6 +40,12 @@ const verifyEmailLimiter = rateLimiter({
     message: 'Too many verification attempts. Please try again after 15 minutes.'
 });
 
+const resendOtpLimiter = rateLimiter({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 3,
+    message: 'Too many OTP resend requests. Please try again after 15 minutes.'
+});
+
 const forgotPasswordLimiter = rateLimiter({
     windowMs: 60 * 60 * 1000, // 1 hour
     max: 3,
@@ -56,7 +62,7 @@ const resetPasswordLimiter = rateLimiter({
 router.post('/register', signupLimiter, registerUser);
 router.post('/login', loginLimiter, loginUser);
 router.post('/verify-email', verifyEmailLimiter, verifyEmail);
-router.post('/resend-otp', verifyEmailLimiter, resendOTP);
+router.post('/resend-otp', resendOtpLimiter, resendOTP);
 router.post('/forgot-password', forgotPasswordLimiter, forgotPassword);
 router.post('/reset-password', resetPasswordLimiter, resetPassword);
 router.post('/refresh-token', refreshToken);

@@ -12,6 +12,7 @@ const Login = () => {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
   const { updateUser } = useContext(UserContext);
 
   const navigate = useNavigate();
@@ -28,6 +29,7 @@ const Login = () => {
       return;
     }
     setError("");
+    setLoading(true);
 
     try {
       const response = await axiosInstance.post(API_PATHS.AUTH.LOGIN, {
@@ -45,14 +47,34 @@ const Login = () => {
         navigate("/dashboard");
       }
     } catch (error) {
-      if (error.response && error.response.status === 403 && error.response.data.isVerified === false) {
-        // Unverified user — show error inline, never redirect to OTP from login
-        setError('Your email is not verified. Please sign up first and complete the OTP verification.');
-      } else if (error.response && error.response.data.message) {
-        setError(error.response.data.message);
+      if (error.response) {
+        const { status, data } = error.response;
+
+        if (status === 403 && data.isVerified === false) {
+          // Unverified user — offer to navigate to verification page
+          setError('Your email is not verified yet. Please complete OTP verification to access your account.');
+          // Auto-redirect after 3 seconds
+          setTimeout(() => {
+            navigate('/verify-otp', { state: { email: data.email || email } });
+          }, 3000);
+        } else if (status === 423) {
+          // Account locked
+          setError(data.message || 'Account is temporarily locked. Please try again later.');
+        } else if (status === 429) {
+          // Rate limited
+          setError(data.message || 'Too many login attempts. Please try again later.');
+        } else if (data.message) {
+          setError(data.message);
+        } else {
+          setError('Login failed. Please check your credentials and try again.');
+        }
+      } else if (error.request) {
+        setError('Unable to reach the server. Please check your internet connection.');
       } else {
-        setError('Something went wrong. Please try again.');
+        setError('An unexpected error occurred. Please try again.');
       }
+    } finally {
+      setLoading(false);
     }
   }
 
@@ -88,8 +110,8 @@ const Login = () => {
           </div>
 
           {error && <p className="text-red-500 text-xs pb-2.5">{error}</p>}
-          <button type="submit" className="btn-primary">
-            LOGIN
+          <button type="submit" className="btn-primary" disabled={loading}>
+            {loading ? 'LOGGING IN...' : 'LOGIN'}
           </button>
           <p className='text-[13px] text-slate-800 dark:text-slate-400 mt-3'>
             Don't have an account?{" "}
